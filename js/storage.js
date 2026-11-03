@@ -216,6 +216,40 @@ const DB = {
     }
   },
 
+  getGoogleClientId() {
+    return localStorage.getItem(APP_CONFIG.storageKeys.googleClientId) || APP_CONFIG.googleClientId || "";
+  },
+
+  async setGoogleClientId(clientId) {
+    const clean = (clientId || "").trim();
+    if (clean) {
+      localStorage.setItem(APP_CONFIG.storageKeys.googleClientId, clean);
+    } else {
+      localStorage.removeItem(APP_CONFIG.storageKeys.googleClientId);
+    }
+    try {
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ google_client_id: clean })
+      });
+    } catch (e) {}
+  },
+
+  async loadServerSettings() {
+    try {
+      const res = await fetch("/api/settings");
+      if (res.ok) {
+        const json = await res.json();
+        if (json.status === "success" && json.data) {
+          if (json.data.google_client_id !== undefined && json.data.google_client_id !== "") {
+            localStorage.setItem(APP_CONFIG.storageKeys.googleClientId, json.data.google_client_id);
+          }
+        }
+      }
+    } catch (e) {}
+  },
+
   // ตรวจสอบสถานะฐานข้อมูลทั้งหมด (SQLite Backend + IndexedDB)
   async getDatabaseStatus() {
     try {
@@ -746,6 +780,7 @@ const DB = {
 
 // เริ่มต้นฐานข้อมูลเมื่อโหลดสคริปต์
 DB.initMockData();
+DB.loadServerSettings();
 
 if (typeof window !== "undefined") {
   window.DB = DB;

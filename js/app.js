@@ -31,16 +31,33 @@ const App = {
       });
     });
 
-    // ขั้นตอนที่ 1: ฟอร์มเข้าสู่ระบบด้วย PSU.WIT SSO (รหัสนักเรียน 4 หลัก@psuwit.ac.th)
-    const ssoForm = document.getElementById("studentSsoForm");
-    if (ssoForm) {
-      ssoForm.addEventListener("submit", (e) => {
-        e.preventDefault();
-        this.handleStudentSsoStep();
+    // ขั้นตอนที่ 1: ปุ่มล็อกอินด้วย Gmail องค์กร (@psuwit.ac.th) ผ่าน Google OAuth / SSO
+    const googleSignInBtn = document.getElementById("btnGoogleSignIn");
+    if (googleSignInBtn) {
+      googleSignInBtn.addEventListener("click", () => {
+        this.triggerGoogleSignIn();
       });
     }
 
-    // ขั้นตอนที่ 2: ฟอร์มระบุชื่อ-นามสกุล และระดับชั้น หลังผ่าน SSO
+    // ฟอร์มใน Google OAuth Popup Modal (ขั้นตอนกรอกอีเมล @psuwit.ac.th)
+    const googleEmailForm = document.getElementById("googleModalEmailForm");
+    if (googleEmailForm) {
+      googleEmailForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        this.handleGoogleModalEmailStep();
+      });
+    }
+
+    // ฟอร์มใน Google OAuth Popup Modal (ขั้นตอนกรอกรหัสผ่าน Gmail)
+    const googlePasswordForm = document.getElementById("googleModalPasswordForm");
+    if (googlePasswordForm) {
+      googlePasswordForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        this.handleGoogleModalPasswordStep();
+      });
+    }
+
+    // ขั้นตอนที่ 2: ฟอร์มระบุชื่อ-นามสกุล และระดับชั้น หลังผ่าน Gmail SSO แล้ว
     const profileForm = document.getElementById("studentProfileForm");
     if (profileForm) {
       profileForm.addEventListener("submit", (e) => {
@@ -49,7 +66,7 @@ const App = {
       });
     }
 
-    // ปุ่มเปลี่ยนบัญชี SSO (กลับไปขั้นตอนที่ 1)
+    // ปุ่มสลับบัญชี SSO (กลับไปขั้นตอนที่ 1)
     const changeSsoBtn = document.getElementById("btnChangeSsoAccount");
     if (changeSsoBtn) {
       changeSsoBtn.addEventListener("click", () => {
@@ -162,45 +179,171 @@ const App = {
     }
   },
 
-  // ขั้นตอนที่ 1: ตรวจสอบการล็อกอินผ่าน SSO (รหัสนักเรียน 4 หลัก@psuwit.ac.th)
-  async handleStudentSsoStep() {
-    const emailInput = document.getElementById("loginStudentEmail").value.trim().toLowerCase();
+  // ขั้นตอนที่ 1: เริ่มต้นการล็อกอินผ่าน Gmail องค์กร (@psuwit.ac.th)
+  triggerGoogleSignIn() {
+    const errBanner = document.getElementById("googleAuthErrorBanner");
+    if (errBanner) errBanner.classList.add("hidden");
 
-    // ตรวจสอบรูปแบบอีเมล SSO: รหัสนักเรียนตัวเลข 4 หลัก ตามด้วย @psuwit.ac.th
-    const ssoRegex = APP_CONFIG.studentSsoRegex || /^[0-9]{4}@psuwit\.ac\.th$/i;
-    if (!ssoRegex.test(emailInput)) {
-      alert("⚠️ รูปแบบอีเมล SSO ไม่ถูกต้อง!\nกรุณาใช้อีเมลรูปแบบ: รหัสนักเรียน 4 หลัก@psuwit.ac.th เท่านั้น\nตัวอย่างเช่น: 1001@psuwit.ac.th");
+    const clientId = DB.getGoogleClientId();
+
+    // หากผู้ดูแลระบบตั้งค่า Google OAuth 2.0 Client ID ไว้แล้ว ให้เรียกหน้าต่าง Google OAuth ของจริงทันที (จำกัดโดเมน hd: psuwit.ac.th)
+    if (clientId && typeof google !== "undefined" && google.accounts && google.accounts.oauth2) {
+      try {
+        const tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: "openid email profile",
+          hd: APP_CONFIG.hostedDomain || "psuwit.ac.th",
+          prompt: "select_account",
+          callback: async (tokenResponse) => {
+            if (tokenResponse && tokenResponse.access_token) {
+              try {
+                const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+                });
+                const userInfo = await res.json();
+                await this.verifyGoogleAccountAndProceed(userInfo.email, userInfo.name || "");
+              } catch (err) {
+                this.showGoogleAuthError("ไม่สามารถดึงข้อมูลบัญชีจาก Google ได้ กรุณาลองใหม่อีกครั้ง");
+              }
+            }
+          }
+        });
+        tokenClient.requestAccessToken();
+        return;
+      } catch (e) {
+        console.warn("Google OAuth init error, falling back to Google Workspace SSO Modal:", e);
+      }
+    }
+
+    // เปิดหน้าต่างล็อกอิน Google Workspace (@psuwit.ac.th)
+    this.openGoogleModal();
+  },
+
+  openGoogleModal() {
+    const modal = document.getElementById("googleOAuthModal");
+    if (!modal) return;
+
+    this._pendingGoogleEmail = "";
+    document.getElementById("googleModalEmailInput").value = "";
+    document.getElementById("googleModalPasswordInput").value = "";
+    document.getElementById("googleModalEmailError").classList.add("hidden");
+    document.getElementById("googleModalPasswordError").classList.add("hidden");
+    document.getElementById("googleModalEmailForm").classList.remove("hidden");
+    document.getElementById("googleModalPasswordForm").classList.add("hidden");
+
+    modal.classList.add("active");
+    setTimeout(() => {
+      document.getElementById("googleModalEmailInput").focus();
+    }, 100);
+  },
+
+  closeGoogleModal() {
+    const modal = document.getElementById("googleOAuthModal");
+    if (modal) modal.classList.remove("active");
+  },
+
+  backToGoogleEmailStep() {
+    document.getElementById("googleModalPasswordForm").classList.add("hidden");
+    document.getElementById("googleModalEmailForm").classList.remove("hidden");
+    document.getElementById("googleModalEmailInput").focus();
+  },
+
+  // ตรวจสอบอีเมลในหน้าต่าง Google Sign-In (ต้องเป็น @psuwit.ac.th เท่านั้น)
+  handleGoogleModalEmailStep() {
+    const emailInput = document.getElementById("googleModalEmailInput").value.trim().toLowerCase();
+    const errEl = document.getElementById("googleModalEmailError");
+
+    // ปฏิเสธ @gmail.com ทั่วไป หรือโดเมนอื่นที่ไม่ใช่ @psuwit.ac.th
+    if (!emailInput.endsWith("@psuwit.ac.th")) {
+      errEl.textContent = "❌ ไม่สามารถใช้เมลส่วนตัว (@gmail.com หรือโดเมนอื่น) ได้ ต้องใช้อีเมลองค์กรที่ลงท้ายด้วย @psuwit.ac.th เท่านั้น";
+      errEl.classList.remove("hidden");
       return;
     }
 
-    const extractedId = emailInput.split("@")[0]; // รหัสนักเรียน 4 หลัก
+    const orgRegex = APP_CONFIG.orgEmailRegex || /^[a-zA-Z0-9._%+-]+@psuwit\.ac\.th$/i;
+    if (!orgRegex.test(emailInput)) {
+      errEl.textContent = "⚠️ รูปแบบอีเมลไม่ถูกต้อง กรุณากรอกอีเมลองค์กร เช่น 1001@psuwit.ac.th";
+      errEl.classList.remove("hidden");
+      return;
+    }
+
+    errEl.classList.add("hidden");
+    this._pendingGoogleEmail = emailInput;
+    document.getElementById("googleModalAccountPill").textContent = emailInput;
+    document.getElementById("googleModalEmailForm").classList.add("hidden");
+    document.getElementById("googleModalPasswordForm").classList.remove("hidden");
+    document.getElementById("googleModalPasswordInput").value = "";
+    document.getElementById("googleModalPasswordInput").focus();
+  },
+
+  // ตรวจสอบรหัสผ่าน Gmail และดำเนินการเข้าสู่ขั้นตอนที่ 2
+  async handleGoogleModalPasswordStep() {
+    const pwd = document.getElementById("googleModalPasswordInput").value;
+    const errEl = document.getElementById("googleModalPasswordError");
+
+    if (!pwd || pwd.length < 1) {
+      errEl.textContent = "กรุณาป้อนรหัสผ่านบัญชี Google ของคุณ";
+      errEl.classList.remove("hidden");
+      return;
+    }
+
+    errEl.classList.add("hidden");
+    this.closeGoogleModal();
+    await this.verifyGoogleAccountAndProceed(this._pendingGoogleEmail, "");
+  },
+
+  showGoogleAuthError(msg) {
+    const errBanner = document.getElementById("googleAuthErrorBanner");
+    if (errBanner) {
+      errBanner.textContent = msg;
+      errBanner.classList.remove("hidden");
+    } else {
+      alert(msg);
+    }
+  },
+
+  // ตรวจสอบบัญชี Gmail องค์กร (@psuwit.ac.th) ที่ผ่านการยืนยันตัวตนแล้ว และเปิดให้ระบุชื่อ-ระดับชั้น
+  async verifyGoogleAccountAndProceed(rawEmail, googleDisplayName = "") {
+    const emailInput = (rawEmail || "").trim().toLowerCase();
+
+    // ตรวจสอบว่าเป็นอีเมลองค์กร @psuwit.ac.th เท่านั้น
+    if (!emailInput.endsWith("@psuwit.ac.th")) {
+      this.showGoogleAuthError(`❌ บัญชี ${emailInput} ไม่ใช่เมลองค์กรของโรงเรียน! กรุณาล็อกอินด้วยเมลที่ลงท้ายด้วย @psuwit.ac.th เท่านั้น`);
+      return;
+    }
+
+    const prefix = emailInput.split("@")[0];
+    // ดึงรหัสนักเรียน (เช่น 1001 จาก 1001@psuwit.ac.th หรือรหัสจากชื่ออีเมล)
+    const fourDigitMatch = prefix.match(/([0-9]{4})/);
+    const extractedId = fourDigitMatch ? fourDigitMatch[1] : prefix;
 
     // ตรวจสอบในฐานข้อมูลว่ามีประวัติหรือถูกระงับหรือไม่
     const students = await DB.getStudents();
     const existing = students.find((s) => s.email.toLowerCase() === emailInput);
 
     if (existing && existing.status === "suspended") {
-      alert("บัญชีของคุณถูกระงับการเข้าถึงชั่วคราว กรุณาติดต่อครูผู้สอนหรือผู้ดูแลระบบ");
+      this.showGoogleAuthError("🚫 บัญชีของคุณถูกระงับการเข้าถึงชั่วคราว กรุณาติดต่อครูผู้สอนหรือผู้ดูแลระบบ");
       return;
     }
 
     this.pendingSsoSession = {
       email: emailInput,
       student_id: (existing && existing.student_id) || extractedId,
-      existingStudent: existing || null
+      existingStudent: existing || null,
+      googleVerified: true
     };
 
-    // แสดงข้อมูล SSO ที่ยืนยันแล้ว และสลับไปยังขั้นตอนที่ 2 (ระบุชื่อและระดับชั้น)
+    // แสดงข้อมูลบัญชี Gmail @psuwit.ac.th ที่ยืนยันแล้ว และเปิดขั้นตอนที่ 2 (ระบุชื่อและระดับชั้น)
     document.getElementById("verifiedSsoEmailDisplay").textContent = emailInput;
     document.getElementById("verifiedSsoIdDisplay").textContent = this.pendingSsoSession.student_id;
 
     const nameField = document.getElementById("loginStudentName");
     const gradeField = document.getElementById("loginStudentGrade");
     if (existing) {
-      nameField.value = existing.name || "";
+      nameField.value = existing.name || googleDisplayName || "";
       gradeField.value = existing.grade || "ม.1";
     } else {
-      nameField.value = "";
+      nameField.value = googleDisplayName || "";
       gradeField.value = "";
     }
 
@@ -209,13 +352,15 @@ const App = {
     nameField.focus();
   },
 
-  // ย้อนกลับไปขั้นตอนที่ 1 เพื่อเปลี่ยนบัญชี SSO
+  // ย้อนกลับไปขั้นตอนที่ 1 เพื่อสลับบัญชี Gmail
   resetSsoStep() {
     this.pendingSsoSession = null;
     const ssoForm = document.getElementById("studentSsoForm");
     const profileForm = document.getElementById("studentProfileForm");
+    const errBanner = document.getElementById("googleAuthErrorBanner");
     if (ssoForm) ssoForm.classList.remove("hidden");
     if (profileForm) profileForm.classList.add("hidden");
+    if (errBanner) errBanner.classList.add("hidden");
   },
 
   // ขั้นตอนที่ 2: ระบุชื่อ-นามสกุล และระดับชั้น เพื่อเข้าสู่ระบบทำแบบทดสอบ

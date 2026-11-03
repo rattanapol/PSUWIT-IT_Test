@@ -88,6 +88,12 @@ const AdminController = {
       btnResetSeed.addEventListener("click", () => this.handleResetSeedDatabase());
     }
 
+    // บันทึก Google OAuth Client ID
+    const btnSaveGoogleClient = document.getElementById("btnSaveGoogleClientId");
+    if (btnSaveGoogleClient) {
+      btnSaveGoogleClient.addEventListener("click", () => this.handleSaveGoogleClientId());
+    }
+
     // การเชื่อมต่อ External Cloud / Google Sheets
     const gasTestBtn = document.getElementById("btnTestGas");
     if (gasTestBtn) {
@@ -383,9 +389,9 @@ const AdminController = {
       status: document.getElementById("formStudentStatus").value
     };
 
-    const ssoRegex = APP_CONFIG.studentSsoRegex || /^[0-9]{4}@psuwit\.ac\.th$/i;
-    if (!ssoRegex.test(studentData.email)) {
-      alert("⚠️ กรุณากรอกอีเมล SSO ในรูปแบบ รหัสนักเรียน 4 หลัก@psuwit.ac.th เท่านั้น (เช่น 1001@psuwit.ac.th)");
+    const orgRegex = APP_CONFIG.orgEmailRegex || /^[a-zA-Z0-9._%+-]+@psuwit\.ac\.th$/i;
+    if (!orgRegex.test(studentData.email)) {
+      alert("⚠️ กรุณากรอกอีเมลองค์กรที่ลงท้ายด้วย @psuwit.ac.th เท่านั้น (เช่น 1001@psuwit.ac.th)");
       return;
     }
 
@@ -424,6 +430,11 @@ const AdminController = {
     const input = document.getElementById("settingsGasUrl");
     if (input) {
       input.value = DB.getGasUrl();
+    }
+
+    const googleInput = document.getElementById("settingsGoogleClientId");
+    if (googleInput) {
+      googleInput.value = DB.getGoogleClientId();
     }
 
     const dbStatus = await DB.getDatabaseStatus();
@@ -468,6 +479,13 @@ const AdminController = {
     await DB.resetDatabaseToSeed();
     await this.refreshData();
     alert("🔄 รีเซ็ตฐานข้อมูลกลับสู่ค่าเริ่มต้นเรียบร้อยแล้ว");
+  },
+
+  async handleSaveGoogleClientId() {
+    const input = document.getElementById("settingsGoogleClientId");
+    const clientId = input ? input.value.trim() : "";
+    await DB.setGoogleClientId(clientId);
+    alert("✅ บันทึก Google OAuth 2.0 Client ID เรียบร้อยแล้ว");
   },
 
   async handleTestGasConnection() {

@@ -415,6 +415,27 @@ class DatabaseManager {
     this.seedDatabase();
     return this.getStatus();
   }
+
+  getSettings() {
+    const rows = this.db.prepare('SELECT setting_key, setting_value FROM system_settings').all();
+    const out = {};
+    for (const r of rows) {
+      out[r.setting_key] = r.setting_value;
+    }
+    return out;
+  }
+
+  saveSettings(settingsObj) {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO system_settings (setting_key, setting_value, updated_at)
+      VALUES (?, ?, ?)
+    `);
+    const now = new Date().toISOString();
+    for (const [k, v] of Object.entries(settingsObj || {})) {
+      stmt.run(k, String(v ?? ''), now);
+    }
+    return this.getSettings();
+  }
 }
 
 const dbManager = new DatabaseManager();
@@ -541,6 +562,16 @@ const server = http.createServer(async (req, res) => {
       if (pathname === '/api/database/seed' && req.method === 'POST') {
         const status = dbManager.resetAndSeedDatabase();
         return sendJson(res, 200, { status: 'success', data: status });
+      }
+
+      if (pathname === '/api/settings' && req.method === 'GET') {
+        return sendJson(res, 200, { status: 'success', data: dbManager.getSettings() });
+      }
+
+      if (pathname === '/api/settings' && req.method === 'POST') {
+        const body = await parseBody(req);
+        const saved = dbManager.saveSettings(body);
+        return sendJson(res, 200, { status: 'success', data: saved });
       }
 
       return sendJson(res, 404, { status: 'error', message: 'API endpoint not found' });

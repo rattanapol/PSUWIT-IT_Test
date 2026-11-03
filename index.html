@@ -16,6 +16,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- jsPDF CDN for crisp PDF Certificate Generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- Google Identity Services (OAuth 2.0 / Sign in with Google) -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
@@ -68,53 +70,80 @@
               </button>
             </div>
 
-            <!-- Student Login Container (2-Step Flow: Step 1 SSO -> Step 2 Name & Grade) -->
+            <!-- Student Login Container (2-Step Flow: Step 1 Gmail @psuwit.ac.th SSO -> Step 2 Name & Grade) -->
             <div id="studentLoginContainer">
 
-              <!-- STEP 1: PSU.WIT SSO Authentication -->
-              <form id="studentSsoForm">
+              <!-- STEP 1: Google / Gmail Organization (@psuwit.ac.th) Sign-In -->
+              <div id="studentSsoForm">
                 <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl mb-4 flex items-center justify-between">
                   <div>
-                    <div class="text-xs font-bold text-indigo-900">🔐 ขั้นตอนที่ 1 / 2 : ยืนยันตัวตนด้วย PSU.WIT SSO</div>
-                    <div class="text-xs text-indigo-700 mt-0.5">กรอกอีเมลโรงเรียนเพื่อตรวจสอบสิทธิ์การเข้าสอบ</div>
+                    <div class="text-xs font-bold text-indigo-900">🔐 ขั้นตอนที่ 1 / 2 : ล็อกอินด้วย Gmail องค์กร (@psuwit.ac.th)</div>
+                    <div class="text-xs text-indigo-700 mt-0.5">ต้องยืนยันตัวตนผ่าน Google Workspace ของโรงเรียนก่อนเข้าทำแบบทดสอบ</div>
                   </div>
                   <span class="badge badge-primary">Step 1</span>
                 </div>
 
-                <div class="form-group">
-                  <label class="form-label" for="loginStudentEmail">อีเมล PSU.WIT SSO (รหัสนักเรียน 4 หลัก@psuwit.ac.th) *</label>
-                  <input
-                    type="email"
-                    id="loginStudentEmail"
-                    class="form-control"
-                    placeholder="เช่น 1001@psuwit.ac.th"
-                    pattern="[0-9]{4}@psuwit\.ac\.th"
-                    title="กรุณากรอกรหัสนักเรียนตัวเลข 4 หลัก ตามด้วย @psuwit.ac.th เช่น 1001@psuwit.ac.th"
-                    required
-                  >
-                  <p class="form-help">
-                    ⚠️ รูปแบบที่กำหนด: <strong>รหัสนักเรียน 4 หลัก@psuwit.ac.th</strong> เท่านั้น (ตัวอย่าง: <code>1001@psuwit.ac.th</code>)
+                <!-- Error Banner when wrong domain (@gmail.com) is used -->
+                <div id="googleAuthErrorBanner" class="hidden p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold"></div>
+
+                <!-- Google Sign-In Box -->
+                <div class="p-5 bg-slate-50 border border-slate-200 rounded-2xl text-center mb-3">
+                  <div class="mx-auto mb-3 flex items-center justify-center" style="width: 48px; height: 48px; border-radius: 50%; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                    <svg width="24" height="24" viewBox="0 0 48 48">
+                      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                    </svg>
+                  </div>
+                  <div class="font-bold text-slate-800 text-sm mb-1">Google Workspace Single Sign-On (SSO)</div>
+                  <p class="text-xs text-slate-500 mb-4">
+                    กรุณาลงชื่อเข้าใช้ด้วยบัญชี Gmail ของโรงเรียน<br>
+                    รูปแบบ <strong class="text-indigo-600">รหัสนักเรียน 4 หลัก@psuwit.ac.th</strong> (เช่น <code>1001@psuwit.ac.th</code>)
                   </p>
+
+                  <button
+                    type="button"
+                    id="btnGoogleSignIn"
+                    class="btn"
+                    style="width: 100%; background: #ffffff; color: #1e293b; border: 1.5px solid #cbd5e1; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; padding: 0.75rem 1rem; box-shadow: 0 2px 6px rgba(15,23,42,0.06);"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 48 48">
+                      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                    </svg>
+                    <span>ลงชื่อเข้าใช้ด้วย Google (@psuwit.ac.th)</span>
+                  </button>
                 </div>
 
-                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem;">
-                  🔑 เข้าสู่ระบบผ่าน PSU.WIT SSO →
-                </button>
-              </form>
+                <p class="form-help text-center">
+                  🔒 ระบบอนุญาตเฉพาะเมลองค์กร <strong>@psuwit.ac.th</strong> เท่านั้น (ไม่อนุญาตบัญชี @gmail.com ทั่วไป)
+                </p>
+              </div>
 
-              <!-- STEP 2: ระบุชื่อ-นามสกุล และระดับชั้น (แสดงหลังจากผ่าน SSO แล้ว) -->
+              <!-- STEP 2: ระบุชื่อ-นามสกุล และระดับชั้น (แสดงหลังจากล็อกอิน Gmail @psuwit.ac.th ผ่านแล้วเท่านั้น) -->
               <form id="studentProfileForm" class="hidden">
                 <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl mb-4">
                   <div class="flex justify-between items-center">
-                    <div>
-                      <div class="text-xs font-bold text-emerald-900">✅ ยืนยันตัวตน SSO สำเร็จ (ขั้นตอนที่ 2 / 2)</div>
-                      <div class="text-xs text-emerald-800 mt-1">
-                        บัญชี SSO: <strong id="verifiedSsoEmailDisplay">-</strong>
-                        (รหัส: <strong id="verifiedSsoIdDisplay">-</strong>)
+                    <div class="flex items-center gap-2">
+                      <svg width="18" height="18" viewBox="0 0 48 48">
+                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                      </svg>
+                      <div>
+                        <div class="text-xs font-bold text-emerald-900">✅ ล็อกอิน Gmail องค์กรสำเร็จ (ขั้นตอนที่ 2 / 2)</div>
+                        <div class="text-xs text-emerald-800 mt-0.5">
+                          บัญชี: <strong id="verifiedSsoEmailDisplay">-</strong>
+                          (รหัสนักเรียน: <strong id="verifiedSsoIdDisplay">-</strong>)
+                        </div>
                       </div>
                     </div>
                     <button type="button" id="btnChangeSsoAccount" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.6rem; font-size: 0.72rem;">
-                      เปลี่ยนบัญชี
+                      สลับบัญชี
                     </button>
                   </div>
                 </div>
@@ -583,31 +612,57 @@
             </div>
           </div>
 
-          <!-- Card 3: เชื่อมต่อ Cloud Database / Google Sheets Webhook เสริม -->
-          <div class="stat-card" style="max-width: 800px;">
-            <h3 class="font-bold text-base mb-1">☁️ เชื่อมต่อ Cloud Sync เสริม (External Database / Google Sheets API)</h3>
-            <p class="text-xs text-slate-500 mb-4">
-              นอกเหนือจากฐานข้อมูลหลักในระบบแล้ว คุณยังสามารถตั้งค่าซิงก์ข้อมูลอัตโนมัติไปยัง Google Sheets หรือ Cloud Webhook ได้อีกด้วย
-            </p>
+          <!-- Card 3: ตั้งค่า Google OAuth 2.0 (Gmail @psuwit.ac.th SSO) & Cloud Sync -->
+          <div class="grid grid-cols-2 gap-6">
+            <div class="stat-card">
+              <h3 class="font-bold text-base mb-1">🔑 ตั้งค่า Google OAuth 2.0 (Gmail @psuwit.ac.th SSO)</h3>
+              <p class="text-xs text-slate-500 mb-3">
+                ระบุ Google OAuth Client ID จาก Google Cloud Console เพื่อเปิดใช้งานหน้าต่างล็อกอิน Google ของจริง (จำกัดโดเมน <code>hd=psuwit.ac.th</code> อัตโนมัติ)
+              </p>
 
-            <div class="form-group">
-              <label class="form-label" for="settingsGasUrl">External Webhook / Google Apps Script Web App URL (ตัวเลือกเสริม)</label>
-              <input
-                type="url"
-                id="settingsGasUrl"
-                class="form-control"
-                placeholder="https://script.google.com/macros/s/AKfycb.../exec"
-              >
-              <div id="gasStatusFeedback" class="mt-2 text-sm font-semibold"></div>
+              <div class="form-group">
+                <label class="form-label" for="settingsGoogleClientId">Google OAuth 2.0 Client ID</label>
+                <input
+                  type="text"
+                  id="settingsGoogleClientId"
+                  class="form-control"
+                  placeholder="เช่น 1234567890-abcdefg.apps.googleusercontent.com"
+                >
+                <p class="form-help">หากยังไม่ได้ระบุ ระบบจะเปิดหน้าต่างจำลอง Google Workspace SSO (@psuwit.ac.th) เพื่อให้ทดสอบระบบได้ทันที</p>
+              </div>
+
+              <div class="flex gap-2 mt-3">
+                <button type="button" id="btnSaveGoogleClientId" class="btn btn-primary btn-sm">
+                  💾 บันทึก Google Client ID
+                </button>
+              </div>
             </div>
 
-            <div class="flex gap-2 mt-4">
-              <button id="btnTestGas" class="btn btn-secondary btn-sm">
-                🔌 ทดสอบการเชื่อมต่อ (Ping)
-              </button>
-              <button id="btnSaveGas" class="btn btn-primary btn-sm">
-                💾 บันทึกการตั้งค่า
-              </button>
+            <div class="stat-card">
+              <h3 class="font-bold text-base mb-1">☁️ เชื่อมต่อ Cloud Sync เสริม (External Webhook / Google Sheets)</h3>
+              <p class="text-xs text-slate-500 mb-3">
+                นอกเหนือจากฐานข้อมูลหลักแล้ว คุณสามารถตั้งค่าซิงก์ข้อมูลไปยัง Google Sheets หรือ Cloud Webhook เสริมได้
+              </p>
+
+              <div class="form-group">
+                <label class="form-label" for="settingsGasUrl">External Webhook / Google Apps Script URL</label>
+                <input
+                  type="url"
+                  id="settingsGasUrl"
+                  class="form-control"
+                  placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                >
+                <div id="gasStatusFeedback" class="mt-2 text-sm font-semibold"></div>
+              </div>
+
+              <div class="flex gap-2 mt-3">
+                <button id="btnTestGas" class="btn btn-secondary btn-sm">
+                  🔌 ทดสอบการเชื่อมต่อ (Ping)
+                </button>
+                <button id="btnSaveGas" class="btn btn-primary btn-sm">
+                  💾 บันทึกการตั้งค่า
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -616,6 +671,86 @@
     </section>
 
   </main>
+
+  <!-- ============================================================== -->
+  <!-- MODAL: GOOGLE WORKSPACE (@psuwit.ac.th) SIGN-IN POPUP          -->
+  <!-- ============================================================== -->
+  <div id="googleOAuthModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 440px; border-radius: 16px; padding: 2rem;">
+      <div class="text-center mb-4">
+        <div class="mx-auto mb-2 flex items-center justify-center">
+          <svg width="36" height="36" viewBox="0 0 48 48">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+        </div>
+        <h3 id="googleModalTitle" class="text-xl font-bold text-slate-900">ลงชื่อเข้าใช้ด้วย Google</h3>
+        <p id="googleModalSubtitle" class="text-xs text-slate-500 mt-1">
+          ใช้บัญชี Google Workspace องค์กร (<strong>@psuwit.ac.th</strong>) เพื่อดำเนินการต่อยัง<br>
+          <span class="font-semibold text-indigo-600">PSU.WIT IT Competency Assessment</span>
+        </p>
+      </div>
+
+      <!-- Google Sign-In Step 1: Enter @psuwit.ac.th Email -->
+      <form id="googleModalEmailForm">
+        <div class="form-group">
+          <label class="form-label" for="googleModalEmailInput">อีเมลองค์กร (@psuwit.ac.th)</label>
+          <input
+            type="email"
+            id="googleModalEmailInput"
+            class="form-control"
+            placeholder="เช่น 1001@psuwit.ac.th"
+            required
+          >
+          <div id="googleModalEmailError" class="hidden text-xs text-red-600 font-semibold mt-2"></div>
+          <p class="form-help mt-1">
+            ต้องเป็นบัญชี Gmail ของโรงเรียนที่ลงท้ายด้วย <strong>@psuwit.ac.th</strong> เท่านั้น (เช่น <code>1001@psuwit.ac.th</code>)
+          </p>
+        </div>
+
+        <div class="flex justify-between items-center mt-6">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="App.closeGoogleModal()">
+            ยกเลิก
+          </button>
+          <button type="submit" class="btn btn-primary btn-sm" style="background: #1a73e8; padding: 0.55rem 1.4rem;">
+            ถัดไป
+          </button>
+        </div>
+      </form>
+
+      <!-- Google Sign-In Step 2: Enter Google Account Password -->
+      <form id="googleModalPasswordForm" class="hidden">
+        <div class="flex items-center justify-center mb-4">
+          <span id="googleModalAccountPill" class="px-3 py-1 rounded-full border border-slate-300 text-xs font-semibold text-slate-700 bg-slate-50">
+            1001@psuwit.ac.th
+          </span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="googleModalPasswordInput">ป้อนรหัสผ่านบัญชี Google ของคุณ</label>
+          <input
+            type="password"
+            id="googleModalPasswordInput"
+            class="form-control"
+            placeholder="รหัสผ่าน Gmail (@psuwit.ac.th)"
+            required
+          >
+          <div id="googleModalPasswordError" class="hidden text-xs text-red-600 font-semibold mt-2"></div>
+        </div>
+
+        <div class="flex justify-between items-center mt-6">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="App.backToGoogleEmailStep()">
+            ← เปลี่ยนอีเมล
+          </button>
+          <button type="submit" class="btn btn-primary btn-sm" style="background: #1a73e8; padding: 0.55rem 1.4rem;">
+            ลงชื่อเข้าใช้
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- ============================================================== -->
   <!-- MODAL: ADD / EDIT STUDENT -->
