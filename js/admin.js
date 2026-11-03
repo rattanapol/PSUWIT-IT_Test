@@ -383,8 +383,9 @@ const AdminController = {
       status: document.getElementById("formStudentStatus").value
     };
 
-    if (!APP_CONFIG.emailRegex.test(studentData.email)) {
-      alert("กรุณากรอกอีเมลโรงเรียนที่ลงท้ายด้วย @psuwit.ac.th เท่านั้น");
+    const ssoRegex = APP_CONFIG.studentSsoRegex || /^[0-9]{4}@psuwit\.ac\.th$/i;
+    if (!ssoRegex.test(studentData.email)) {
+      alert("⚠️ กรุณากรอกอีเมล SSO ในรูปแบบ รหัสนักเรียน 4 หลัก@psuwit.ac.th เท่านั้น (เช่น 1001@psuwit.ac.th)");
       return;
     }
 

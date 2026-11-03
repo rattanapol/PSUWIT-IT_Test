@@ -68,47 +68,87 @@
               </button>
             </div>
 
-            <!-- Student Login Form -->
-            <form id="studentLoginForm">
-              <div class="form-group">
-                <label class="form-label" for="loginStudentEmail">อีเมลโรงเรียน (@psuwit.ac.th) *</label>
-                <input
-                  type="email"
-                  id="loginStudentEmail"
-                  class="form-control"
-                  placeholder="เช่น s641001@psuwit.ac.th หรือ somchai@psuwit.ac.th"
-                  required
-                >
-                <p class="form-help">⚠️ ต้องใช้อีเมลลงท้ายด้วย <strong>@psuwit.ac.th</strong> เท่านั้น</p>
-              </div>
+            <!-- Student Login Container (2-Step Flow: Step 1 SSO -> Step 2 Name & Grade) -->
+            <div id="studentLoginContainer">
 
-              <div class="form-group">
-                <label class="form-label" for="loginStudentName">ชื่อ - นามสกุล นักเรียน *</label>
-                <input
-                  type="text"
-                  id="loginStudentName"
-                  class="form-control"
-                  placeholder="เช่น เด็กชายกิตติศักดิ์ มณีโชติ"
-                  required
-                >
-              </div>
+              <!-- STEP 1: PSU.WIT SSO Authentication -->
+              <form id="studentSsoForm">
+                <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl mb-4 flex items-center justify-between">
+                  <div>
+                    <div class="text-xs font-bold text-indigo-900">🔐 ขั้นตอนที่ 1 / 2 : ยืนยันตัวตนด้วย PSU.WIT SSO</div>
+                    <div class="text-xs text-indigo-700 mt-0.5">กรอกอีเมลโรงเรียนเพื่อตรวจสอบสิทธิ์การเข้าสอบ</div>
+                  </div>
+                  <span class="badge badge-primary">Step 1</span>
+                </div>
 
-              <div class="form-group">
-                <label class="form-label" for="loginStudentGrade">ระดับชั้นมัธยมศึกษา *</label>
-                <select id="loginStudentGrade" class="form-control" required>
-                  <option value="ม.1">มัธยมศึกษาปีที่ 1 (ม.1)</option>
-                  <option value="ม.2">มัธยมศึกษาปีที่ 2 (ม.2)</option>
-                  <option value="ม.3">มัธยมศึกษาปีที่ 3 (ม.3)</option>
-                  <option value="ม.4">มัธยมศึกษาปีที่ 4 (ม.4)</option>
-                  <option value="ม.5">มัธยมศึกษาปีที่ 5 (ม.5)</option>
-                  <option value="ม.6">มัธยมศึกษาปีที่ 6 (ม.6)</option>
-                </select>
-              </div>
+                <div class="form-group">
+                  <label class="form-label" for="loginStudentEmail">อีเมล PSU.WIT SSO (รหัสนักเรียน 4 หลัก@psuwit.ac.th) *</label>
+                  <input
+                    type="email"
+                    id="loginStudentEmail"
+                    class="form-control"
+                    placeholder="เช่น 1001@psuwit.ac.th"
+                    pattern="[0-9]{4}@psuwit\.ac\.th"
+                    title="กรุณากรอกรหัสนักเรียนตัวเลข 4 หลัก ตามด้วย @psuwit.ac.th เช่น 1001@psuwit.ac.th"
+                    required
+                  >
+                  <p class="form-help">
+                    ⚠️ รูปแบบที่กำหนด: <strong>รหัสนักเรียน 4 หลัก@psuwit.ac.th</strong> เท่านั้น (ตัวอย่าง: <code>1001@psuwit.ac.th</code>)
+                  </p>
+                </div>
 
-              <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
-                เข้าสู่ระบบเพื่อเริ่มทดสอบ 🚀
-              </button>
-            </form>
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem;">
+                  🔑 เข้าสู่ระบบผ่าน PSU.WIT SSO →
+                </button>
+              </form>
+
+              <!-- STEP 2: ระบุชื่อ-นามสกุล และระดับชั้น (แสดงหลังจากผ่าน SSO แล้ว) -->
+              <form id="studentProfileForm" class="hidden">
+                <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl mb-4">
+                  <div class="flex justify-between items-center">
+                    <div>
+                      <div class="text-xs font-bold text-emerald-900">✅ ยืนยันตัวตน SSO สำเร็จ (ขั้นตอนที่ 2 / 2)</div>
+                      <div class="text-xs text-emerald-800 mt-1">
+                        บัญชี SSO: <strong id="verifiedSsoEmailDisplay">-</strong>
+                        (รหัส: <strong id="verifiedSsoIdDisplay">-</strong>)
+                      </div>
+                    </div>
+                    <button type="button" id="btnChangeSsoAccount" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.6rem; font-size: 0.72rem;">
+                      เปลี่ยนบัญชี
+                    </button>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="loginStudentName">ระบุชื่อ - นามสกุล นักเรียน *</label>
+                  <input
+                    type="text"
+                    id="loginStudentName"
+                    class="form-control"
+                    placeholder="เช่น เด็กชายกิตติศักดิ์ มณีโชติ"
+                    required
+                  >
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="loginStudentGrade">เลือกระดับชั้นมัธยมศึกษา *</label>
+                  <select id="loginStudentGrade" class="form-control" required>
+                    <option value="" disabled selected>-- กรุณาเลือกระดับชั้น --</option>
+                    <option value="ม.1">มัธยมศึกษาปีที่ 1 (ม.1)</option>
+                    <option value="ม.2">มัธยมศึกษาปีที่ 2 (ม.2)</option>
+                    <option value="ม.3">มัธยมศึกษาปีที่ 3 (ม.3)</option>
+                    <option value="ม.4">มัธยมศึกษาปีที่ 4 (ม.4)</option>
+                    <option value="ม.5">มัธยมศึกษาปีที่ 5 (ม.5)</option>
+                    <option value="ม.6">มัธยมศึกษาปีที่ 6 (ม.6)</option>
+                  </select>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem; background: linear-gradient(135deg, #059669, #10B981);">
+                  ยืนยันข้อมูลและเข้าทำแบบทดสอบ 🚀
+                </button>
+              </form>
+
+            </div>
 
             <!-- Admin Login Form -->
             <form id="adminLoginForm" class="hidden">
@@ -588,16 +628,16 @@
       </div>
       <form id="studentManageForm">
         <div class="form-group">
-          <label class="form-label" for="formStudentId">รหัสนักเรียน</label>
-          <input type="text" id="formStudentId" class="form-control" placeholder="เช่น s641001" required>
+          <label class="form-label" for="formStudentId">รหัสนักเรียน (4 หลัก)</label>
+          <input type="text" id="formStudentId" class="form-control" placeholder="เช่น 1001" pattern="[0-9]{4}" maxlength="4" required>
         </div>
         <div class="form-group">
           <label class="form-label" for="formStudentName">ชื่อ-นามสกุล</label>
           <input type="text" id="formStudentName" class="form-control" placeholder="เช่น เด็กชายกิตติศักดิ์ มณีโชติ" required>
         </div>
         <div class="form-group">
-          <label class="form-label" for="formStudentEmail">อีเมลโรงเรียน (@psuwit.ac.th)</label>
-          <input type="email" id="formStudentEmail" class="form-control" placeholder="เช่น s641001@psuwit.ac.th" required>
+          <label class="form-label" for="formStudentEmail">อีเมล SSO (รหัสนักเรียน 4 หลัก@psuwit.ac.th)</label>
+          <input type="email" id="formStudentEmail" class="form-control" placeholder="เช่น 1001@psuwit.ac.th" required>
         </div>
         <div class="form-group">
           <label class="form-label" for="formStudentGrade">ระดับชั้น</label>

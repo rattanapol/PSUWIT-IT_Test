@@ -7,21 +7,21 @@
  */
 
 const INITIAL_SEED_STUDENTS = [
-  { student_id: "s641001", name: "เด็กชายกิตติศักดิ์ มณีโชติ", email: "s641001@psuwit.ac.th", grade: "ม.1", status: "active", pretest_completed: true, posttest_completed: false, created_at: "2026-05-10T08:30:00Z" },
-  { student_id: "s641002", name: "เด็กหญิงกมลวรรณ ชัยเจริญ", email: "kamonwan@psuwit.ac.th", grade: "ม.1", status: "active", pretest_completed: true, posttest_completed: true, created_at: "2026-05-10T09:00:00Z" },
-  { student_id: "s632001", name: "เด็กชายนภดล รัตนโกสินทร์", email: "s632001@psuwit.ac.th", grade: "ม.2", status: "active", pretest_completed: true, posttest_completed: false, created_at: "2026-05-11T10:15:00Z" },
-  { student_id: "s623001", name: "เด็กหญิงชญานิษฐ์ วรรณกรรม", email: "chayanit@psuwit.ac.th", grade: "ม.3", status: "active", pretest_completed: true, posttest_completed: true, created_at: "2026-05-12T11:20:00Z" },
-  { student_id: "s614001", name: "นายธนภัทร สุขสมบูรณ์", email: "s614001@psuwit.ac.th", grade: "ม.4", status: "active", pretest_completed: true, posttest_completed: true, created_at: "2026-05-13T13:45:00Z" },
-  { student_id: "s605001", name: "นางสาวศศิธร เปล่งศรี", email: "sasithorn@psuwit.ac.th", grade: "ม.5", status: "active", pretest_completed: true, posttest_completed: false, created_at: "2026-05-14T14:10:00Z" },
-  { student_id: "s596001", name: "นายวริทธิ์ อัครเดชาภิรมย์", email: "s596001@psuwit.ac.th", grade: "ม.6", status: "active", pretest_completed: true, posttest_completed: true, created_at: "2026-05-15T15:00:00Z" }
+  { student_id: "1001", name: "เด็กชายกิตติศักดิ์ มณีโชติ", email: "1001@psuwit.ac.th", grade: "ม.1", status: "active", pretest_completed: true, posttest_completed: false, created_at: "2026-05-10T08:30:00Z" },
+  { student_id: "1002", name: "เด็กหญิงกมลวรรณ ชัยเจริญ", email: "1002@psuwit.ac.th", grade: "ม.1", status: "active", pretest_completed: true, posttest_completed: true, created_at: "2026-05-10T09:00:00Z" },
+  { student_id: "2001", name: "เด็กชายนภดล รัตนโกสินทร์", email: "2001@psuwit.ac.th", grade: "ม.2", status: "active", pretest_completed: true, posttest_completed: false, created_at: "2026-05-11T10:15:00Z" },
+  { student_id: "3001", name: "เด็กหญิงชญานิษฐ์ วรรณกรรม", email: "3001@psuwit.ac.th", grade: "ม.3", status: "active", pretest_completed: true, posttest_completed: true, created_at: "2026-05-12T11:20:00Z" },
+  { student_id: "4001", name: "นายธนภัทร สุขสมบูรณ์", email: "4001@psuwit.ac.th", grade: "ม.4", status: "active", pretest_completed: true, posttest_completed: true, created_at: "2026-05-13T13:45:00Z" },
+  { student_id: "5001", name: "นางสาวศศิธร เปล่งศรี", email: "5001@psuwit.ac.th", grade: "ม.5", status: "active", pretest_completed: true, posttest_completed: false, created_at: "2026-05-14T14:10:00Z" },
+  { student_id: "6001", name: "นายวริทธิ์ อัครเดชาภิรมย์", email: "6001@psuwit.ac.th", grade: "ม.6", status: "active", pretest_completed: true, posttest_completed: true, created_at: "2026-05-15T15:00:00Z" }
 ];
 
 const INITIAL_SEED_ASSESSMENTS = [
   {
     test_id: "T-1715320000001",
-    student_id: "s641001",
+    student_id: "1001",
     student_name: "เด็กชายกิตติศักดิ์ มณีโชติ",
-    email: "s641001@psuwit.ac.th",
+    email: "1001@psuwit.ac.th",
     grade: "ม.1",
     test_type: "Pre-test",
     score_total: 18,
@@ -35,9 +35,9 @@ const INITIAL_SEED_ASSESSMENTS = [
   },
   {
     test_id: "T-1715320000002",
-    student_id: "s641002",
+    student_id: "1002",
     student_name: "เด็กหญิงกมลวรรณ ชัยเจริญ",
-    email: "kamonwan@psuwit.ac.th",
+    email: "1002@psuwit.ac.th",
     grade: "ม.1",
     test_type: "Pre-test",
     score_total: 19,
@@ -51,9 +51,9 @@ const INITIAL_SEED_ASSESSMENTS = [
   },
   {
     test_id: "T-1715320000003",
-    student_id: "s641002",
+    student_id: "1002",
     student_name: "เด็กหญิงกมลวรรณ ชัยเจริญ",
-    email: "kamonwan@psuwit.ac.th",
+    email: "1002@psuwit.ac.th",
     grade: "ม.1",
     test_type: "Post-test",
     score_total: 27,
@@ -67,9 +67,9 @@ const INITIAL_SEED_ASSESSMENTS = [
   },
   {
     test_id: "T-1715320000004",
-    student_id: "s614001",
+    student_id: "4001",
     student_name: "นายธนภัทร สุขสมบูรณ์",
-    email: "s614001@psuwit.ac.th",
+    email: "4001@psuwit.ac.th",
     grade: "ม.4",
     test_type: "Pre-test",
     score_total: 20,
@@ -83,9 +83,9 @@ const INITIAL_SEED_ASSESSMENTS = [
   },
   {
     test_id: "T-1715320000005",
-    student_id: "s614001",
+    student_id: "4001",
     student_name: "นายธนภัทร สุขสมบูรณ์",
-    email: "s614001@psuwit.ac.th",
+    email: "4001@psuwit.ac.th",
     grade: "ม.4",
     test_type: "Post-test",
     score_total: 28,
@@ -277,8 +277,12 @@ const DB = {
   // เตรียมข้อมูลเริ่มต้นสำหรับ IndexedDB และ LocalStorage
   async initMockData() {
     let rawStudents = localStorage.getItem(APP_CONFIG.storageKeys.students);
-    if (!rawStudents) {
+    // ตรวจสอบว่ามีข้อมูลรูปแบบเก่า (เช่น s641001@psuwit.ac.th) ค้างอยู่หรือไม่ หากมีให้อัปเดตเป็นรูปแบบรหัส 4 หลัก
+    if (!rawStudents || rawStudents.includes("s641001@psuwit.ac.th")) {
       localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(INITIAL_SEED_STUDENTS));
+      localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify(INITIAL_SEED_ASSESSMENTS));
+      await IDBEngine.clear("students");
+      await IDBEngine.clear("assessments");
       rawStudents = JSON.stringify(INITIAL_SEED_STUDENTS);
     }
 

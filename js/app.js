@@ -5,6 +5,7 @@
 
 const App = {
   currentUser: null,       // { student_id, name, email, grade, role }
+  pendingSsoSession: null, // { email, student_id, existingStudent }
   currentSession: null,    // Instance ของ AssessmentSession
   currentResult: null,     // ผลการสอบล่าสุด
   activeView: "view-auth",
@@ -22,17 +23,37 @@ const App = {
         document.querySelectorAll(".auth-tab-btn").forEach((b) => b.classList.remove("active"));
         e.currentTarget.classList.add("active");
 
-        document.getElementById("studentLoginForm").classList.toggle("hidden", role !== "student");
+        const studentContainer = document.getElementById("studentLoginContainer");
+        if (studentContainer) {
+          studentContainer.classList.toggle("hidden", role !== "student");
+        }
         document.getElementById("adminLoginForm").classList.toggle("hidden", role !== "admin");
       });
     });
 
-    // ฟอร์มเข้าสู่ระบบของนักเรียน
-    const studentForm = document.getElementById("studentLoginForm");
-    if (studentForm) {
-      studentForm.addEventListener("submit", (e) => {
+    // ขั้นตอนที่ 1: ฟอร์มเข้าสู่ระบบด้วย PSU.WIT SSO (รหัสนักเรียน 4 หลัก@psuwit.ac.th)
+    const ssoForm = document.getElementById("studentSsoForm");
+    if (ssoForm) {
+      ssoForm.addEventListener("submit", (e) => {
         e.preventDefault();
-        this.handleStudentLogin();
+        this.handleStudentSsoStep();
+      });
+    }
+
+    // ขั้นตอนที่ 2: ฟอร์มระบุชื่อ-นามสกุล และระดับชั้น หลังผ่าน SSO
+    const profileForm = document.getElementById("studentProfileForm");
+    if (profileForm) {
+      profileForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        this.handleStudentProfileSubmit();
+      });
+    }
+
+    // ปุ่มเปลี่ยนบัญชี SSO (กลับไปขั้นตอนที่ 1)
+    const changeSsoBtn = document.getElementById("btnChangeSsoAccount");
+    if (changeSsoBtn) {
+      changeSsoBtn.addEventListener("click", () => {
+        this.resetSsoStep();
       });
     }
 
@@ -141,46 +162,92 @@ const App = {
     }
   },
 
-  // เข้าสู่ระบบนักเรียน
-  async handleStudentLogin() {
+  // ขั้นตอนที่ 1: ตรวจสอบการล็อกอินผ่าน SSO (รหัสนักเรียน 4 หลัก@psuwit.ac.th)
+  async handleStudentSsoStep() {
     const emailInput = document.getElementById("loginStudentEmail").value.trim().toLowerCase();
-    const nameInput = document.getElementById("loginStudentName").value.trim();
-    const gradeInput = document.getElementById("loginStudentGrade").value;
 
-    // ตรวจสอบรูปแบบอีเมลโรงเรียน
-    if (!APP_CONFIG.emailRegex.test(emailInput)) {
-      alert("⚠️ รูปแบบอีเมลไม่ถูกต้อง! ต้องลงท้ายด้วย @psuwit.ac.th เท่านั้น\nตัวอย่าง: s641001@psuwit.ac.th หรือ somchai@psuwit.ac.th");
+    // ตรวจสอบรูปแบบอีเมล SSO: รหัสนักเรียนตัวเลข 4 หลัก ตามด้วย @psuwit.ac.th
+    const ssoRegex = APP_CONFIG.studentSsoRegex || /^[0-9]{4}@psuwit\.ac\.th$/i;
+    if (!ssoRegex.test(emailInput)) {
+      alert("⚠️ รูปแบบอีเมล SSO ไม่ถูกต้อง!\nกรุณาใช้อีเมลรูปแบบ: รหัสนักเรียน 4 หลัก@psuwit.ac.th เท่านั้น\nตัวอย่างเช่น: 1001@psuwit.ac.th");
       return;
     }
 
-    if (!nameInput) {
-      alert("กรุณากรอกชื่อ-นามสกุลของนักเรียน");
-      return;
-    }
+    const extractedId = emailInput.split("@")[0]; // รหัสนักเรียน 4 หลัก
 
-    // ดึงรหัสนักเรียนจากอีเมล (หากขึ้นต้นด้วย s และตามด้วยตัวเลข เช่น s641001)
-    let extractedId = "";
-    const match = emailInput.match(/^([sS]?[0-9]{5,8})@/);
-    if (match) {
-      extractedId = match[1];
-    }
-
-    // ตรวจสอบในฐานข้อมูลว่ามีอยู่แล้วหรือไม่
+    // ตรวจสอบในฐานข้อมูลว่ามีประวัติหรือถูกระงับหรือไม่
     const students = await DB.getStudents();
-    let existing = students.find((s) => s.email.toLowerCase() === emailInput);
+    const existing = students.find((s) => s.email.toLowerCase() === emailInput);
 
     if (existing && existing.status === "suspended") {
       alert("บัญชีของคุณถูกระงับการเข้าถึงชั่วคราว กรุณาติดต่อครูผู้สอนหรือผู้ดูแลระบบ");
       return;
     }
 
-    const studentRecord = {
-      student_id: (existing && existing.student_id) || extractedId || `ID-${Date.now().toString().slice(-4)}`,
-      name: nameInput,
+    this.pendingSsoSession = {
       email: emailInput,
+      student_id: (existing && existing.student_id) || extractedId,
+      existingStudent: existing || null
+    };
+
+    // แสดงข้อมูล SSO ที่ยืนยันแล้ว และสลับไปยังขั้นตอนที่ 2 (ระบุชื่อและระดับชั้น)
+    document.getElementById("verifiedSsoEmailDisplay").textContent = emailInput;
+    document.getElementById("verifiedSsoIdDisplay").textContent = this.pendingSsoSession.student_id;
+
+    const nameField = document.getElementById("loginStudentName");
+    const gradeField = document.getElementById("loginStudentGrade");
+    if (existing) {
+      nameField.value = existing.name || "";
+      gradeField.value = existing.grade || "ม.1";
+    } else {
+      nameField.value = "";
+      gradeField.value = "";
+    }
+
+    document.getElementById("studentSsoForm").classList.add("hidden");
+    document.getElementById("studentProfileForm").classList.remove("hidden");
+    nameField.focus();
+  },
+
+  // ย้อนกลับไปขั้นตอนที่ 1 เพื่อเปลี่ยนบัญชี SSO
+  resetSsoStep() {
+    this.pendingSsoSession = null;
+    const ssoForm = document.getElementById("studentSsoForm");
+    const profileForm = document.getElementById("studentProfileForm");
+    if (ssoForm) ssoForm.classList.remove("hidden");
+    if (profileForm) profileForm.classList.add("hidden");
+  },
+
+  // ขั้นตอนที่ 2: ระบุชื่อ-นามสกุล และระดับชั้น เพื่อเข้าสู่ระบบทำแบบทดสอบ
+  async handleStudentProfileSubmit() {
+    if (!this.pendingSsoSession) {
+      this.resetSsoStep();
+      return;
+    }
+
+    const nameInput = document.getElementById("loginStudentName").value.trim();
+    const gradeInput = document.getElementById("loginStudentGrade").value;
+
+    if (!nameInput) {
+      alert("กรุณากรอกชื่อ - นามสกุลของนักเรียน");
+      return;
+    }
+
+    if (!gradeInput) {
+      alert("กรุณาเลือกระดับชั้นมัธยมศึกษา (ม.1 - ม.6)");
+      return;
+    }
+
+    const existing = this.pendingSsoSession.existingStudent;
+    const studentRecord = {
+      student_id: this.pendingSsoSession.student_id,
+      name: nameInput,
+      email: this.pendingSsoSession.email,
       grade: gradeInput,
       role: "student",
-      status: "active"
+      status: "active",
+      pretest_completed: existing ? Boolean(existing.pretest_completed) : false,
+      posttest_completed: existing ? Boolean(existing.posttest_completed) : false
     };
 
     // บันทึก/อัปเดตลงฐานข้อมูล
@@ -220,6 +287,7 @@ const App = {
     }
     this.currentUser = null;
     this.currentSession = null;
+    this.resetSsoStep();
     localStorage.removeItem(APP_CONFIG.storageKeys.currentUser);
     this.switchView("view-auth");
   },

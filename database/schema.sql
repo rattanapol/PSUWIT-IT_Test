@@ -59,3 +59,4 @@ CREATE TABLE IF NOT EXISTS system_settings (
     setting_value TEXT,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
