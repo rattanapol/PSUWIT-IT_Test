@@ -24,8 +24,8 @@ const INITIAL_SEED_ASSESSMENTS = [
     email: "1001@psuwit.ac.th",
     grade: "ม.1",
     test_type: "Pre-test",
-    score_total: 18,
-    max_score: 30,
+    score_total: 45,
+    max_score: 75,
     score_percent: 60,
     domain_scores: { D1: 60, D2: 80, D3: 40, D4: 60, D5: 80, D6: 40 },
     time_spent_seconds: 520,
@@ -40,9 +40,9 @@ const INITIAL_SEED_ASSESSMENTS = [
     email: "1002@psuwit.ac.th",
     grade: "ม.1",
     test_type: "Pre-test",
-    score_total: 19,
-    max_score: 30,
-    score_percent: 63,
+    score_total: 48,
+    max_score: 75,
+    score_percent: 64,
     domain_scores: { D1: 60, D2: 80, D3: 60, D4: 60, D5: 60, D6: 60 },
     time_spent_seconds: 480,
     violations_count: 0,
@@ -56,9 +56,9 @@ const INITIAL_SEED_ASSESSMENTS = [
     email: "1002@psuwit.ac.th",
     grade: "ม.1",
     test_type: "Post-test",
-    score_total: 27,
-    max_score: 30,
-    score_percent: 90,
+    score_total: 68,
+    max_score: 75,
+    score_percent: 91,
     domain_scores: { D1: 100, D2: 80, D3: 100, D4: 80, D5: 100, D6: 80 },
     time_spent_seconds: 410,
     violations_count: 0,
@@ -72,9 +72,9 @@ const INITIAL_SEED_ASSESSMENTS = [
     email: "4001@psuwit.ac.th",
     grade: "ม.4",
     test_type: "Pre-test",
-    score_total: 20,
-    max_score: 30,
-    score_percent: 66,
+    score_total: 50,
+    max_score: 75,
+    score_percent: 67,
     domain_scores: { D1: 80, D2: 60, D3: 60, D4: 80, D5: 60, D6: 60 },
     time_spent_seconds: 640,
     violations_count: 1,
@@ -88,8 +88,8 @@ const INITIAL_SEED_ASSESSMENTS = [
     email: "4001@psuwit.ac.th",
     grade: "ม.4",
     test_type: "Post-test",
-    score_total: 28,
-    max_score: 30,
+    score_total: 70,
+    max_score: 75,
     score_percent: 93,
     domain_scores: { D1: 100, D2: 100, D3: 80, D4: 100, D5: 100, D6: 80 },
     time_spent_seconds: 510,
@@ -333,8 +333,9 @@ const DB = {
     }
 
     let rawAssessments = localStorage.getItem(APP_CONFIG.storageKeys.assessments);
-    if (!rawAssessments) {
+    if (!rawAssessments || (rawAssessments.includes("T-10001") && rawAssessments.includes('"max_score":30'))) {
       localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify(INITIAL_SEED_ASSESSMENTS));
+      await IDBEngine.clear("assessments");
       rawAssessments = JSON.stringify(INITIAL_SEED_ASSESSMENTS);
     } else {
       // อัปเกรดข้อมูลคะแนนรายด้านเดิมที่เป็น 1-5 ให้เป็นเปอร์เซ็นต์ 0-100% สำหรับกราฟเรดาร์
@@ -835,7 +836,7 @@ const DB = {
 
     assessments.forEach((a) => {
       const d = a.domain_scores || {};
-      sql += `INSERT INTO assessments (test_id, student_id, student_name, email, grade, test_type, score_total, max_score, score_percent, d1_score, d2_score, d3_score, d4_score, d5_score, d6_score, domain_scores_json, time_spent_seconds, violations_count, passed, submitted_at) VALUES ('${esc(a.test_id)}', '${esc(a.student_id)}', '${esc(a.student_name)}', '${esc(a.email)}', '${esc(a.grade)}', '${esc(a.test_type)}', ${Number(a.score_total || 0)}, ${Number(a.max_score || 30)}, ${Number(a.score_percent || 0)}, ${Number(d.D1 || 0)}, ${Number(d.D2 || 0)}, ${Number(d.D3 || 0)}, ${Number(d.D4 || 0)}, ${Number(d.D5 || 0)}, ${Number(d.D6 || 0)}, '${esc(JSON.stringify(d))}', ${Number(a.time_spent_seconds || 0)}, ${Number(a.violations_count || 0)}, ${a.passed ? 1 : 0}, '${esc(a.submitted_at || new Date().toISOString())}');\n`;
+      sql += `INSERT INTO assessments (test_id, student_id, student_name, email, grade, test_type, score_total, max_score, score_percent, d1_score, d2_score, d3_score, d4_score, d5_score, d6_score, domain_scores_json, time_spent_seconds, violations_count, passed, submitted_at) VALUES ('${esc(a.test_id)}', '${esc(a.student_id)}', '${esc(a.student_name)}', '${esc(a.email)}', '${esc(a.grade)}', '${esc(a.test_type)}', ${Number(a.score_total || 0)}, ${Number(a.max_score || 75)}, ${Number(a.score_percent || 0)}, ${Number(d.D1 || 0)}, ${Number(d.D2 || 0)}, ${Number(d.D3 || 0)}, ${Number(d.D4 || 0)}, ${Number(d.D5 || 0)}, ${Number(d.D6 || 0)}, '${esc(JSON.stringify(d))}', ${Number(a.time_spent_seconds || 0)}, ${Number(a.violations_count || 0)}, ${a.passed ? 1 : 0}, '${esc(a.submitted_at || new Date().toISOString())}');\n`;
     });
 
     const blob = new Blob([sql], { type: "text/plain;charset=utf-8" });

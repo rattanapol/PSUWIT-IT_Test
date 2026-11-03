@@ -29,7 +29,7 @@ d:\Test/
 │   └── main.css                 # สไตล์ชีตหลักของระบบ
 ├── js/
 │   ├── config.js                # ค่าคงที่, Regex อีเมล @psuwit.ac.th, primaryAdminEmail (winai@psuwit.ac.th)
-│   ├── questions.js             # คลังข้อสอบ ม.1 - ม.6 ครบ 6 ด้าน (Rubric 1-5 คะแนน, ปรับความยาวตัวเลือกสมดุล)
+│   ├── questions.js             # คลังข้อสอบ ม.1 - ม.6 ระดับชั้นละ 15 ข้อ (รวม 90 ข้อ, คะแนนเต็ม 75 คะแนน, ครบ 6 ด้านสมรรถนะ)
 │   ├── storage.js               # Multi-Tier Database Adapter (SQLite REST API + IndexedDB v2 + LocalStorage)
 │   ├── assessment.js            # กลไกห้องสอบ (สุ่มข้อสอบ/ตัวเลือก, จับเวลา 15 นาที, Anti-Cheat สลับหน้าจอ 3 ครั้ง)
 │   ├── charts.js                # กราฟใยแมงมุม (Chart.js Radar Chart) และกราฟแท่งเปรียบเทียบรายระดับชั้น
@@ -92,3 +92,4 @@ d:\Test/
    เปิดใช้งานที่ `http://localhost:3000`
    - **ทดสอบฝั่งนักเรียน**: ล็อกอินด้วย `1001@psuwit.ac.th`
    - **ทดสอบฝั่งผู้ดูแลระบบ (Admin)**: ล็อกอินด้วย `winai@psuwit.ac.th`
+

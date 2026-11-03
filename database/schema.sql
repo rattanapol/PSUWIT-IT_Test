@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS assessments (
     grade VARCHAR(20) NOT NULL,
     test_type VARCHAR(20) NOT NULL, -- 'Pre-test' หรือ 'Post-test'
     score_total INTEGER NOT NULL DEFAULT 0,
-    max_score INTEGER NOT NULL DEFAULT 30,
+    max_score INTEGER NOT NULL DEFAULT 75,
     score_percent INTEGER NOT NULL DEFAULT 0,
     d1_score INTEGER NOT NULL DEFAULT 0, -- Digital Literacy & Safety (%)
     d2_score INTEGER NOT NULL DEFAULT 0, -- Hardware, Systems & Networks (%)
