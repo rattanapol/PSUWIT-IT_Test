@@ -1,0 +1,23 @@
+{
+  "name": "psuwit-it-test",
+  "version": "1.0.0",
+  "description": "ระบบทดสอบสมรรถนะเทคโนโลยีสารสนเทศ (IT Competency Assessment System) โรงเรียน ม.อ. วิทยานุสรณ์ พร้อมฐานข้อมูล SQLite 3 & IndexedDB",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rattanapol/PSUWIT-IT_Test.git"
+  },
+  "keywords": [
+    "psuwit",
+    "it-competency",
+    "assessment",
+    "sqlite",
+    "radar-chart",
+    "certificate"
+  ],
+  "license": "MIT"
+}

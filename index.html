@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบทดสอบสมรรถนะเทคโนโลยีสารสนเทศ (IT Competency) - PSU Wittayanusorn</title>
+  
+  <!-- SEO & Social Meta -->
+  <meta name="description" content="ระบบทดสอบวัดสมรรถนะทาง IT สำหรับนักเรียนมัธยมศึกษาปีที่ 1-6 โรงเรียน ม.อ. วิทยานุสรณ์ พร้อมระบบประเมินผลกราฟใยแมงมุมและเกียรติบัตรอิเล็กทรอนิกส์ PDF">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💻</text></svg>">
+
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="css/main.css">
+
+  <!-- Chart.js CDN for Spider Radar Charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- jsPDF CDN for crisp PDF Certificate Generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- Top Application Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand-wrapper">
+        <div class="brand-logo-badge">PSU WIT</div>
+        <div>
+          <h1 class="brand-title">IT Competency Assessment</h1>
+          <p class="brand-subtitle">ระบบทดสอบสมรรถนะเทคโนโลยีสารสนเทศ มัธยมศึกษา (ม.1 - ม.6)</p>
+        </div>
+      </div>
+
+      <!-- User Info Badge in Header -->
+      <div id="headerUserBadge" class="user-badge hidden">
+        <div class="user-info-text">
+          <div id="headerUserName" class="user-name">นักเรียน</div>
+          <div id="headerUserRole" class="user-role">มัธยมศึกษาปีที่ 1</div>
+        </div>
+        <button class="btn btn-sm btn-secondary btn-logout" title="ออกจากระบบ">
+          ออกจากระบบ
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Application Content Container -->
+  <main class="main-content">
+
+    <!-- ============================================================== -->
+    <!-- VIEW 1: AUTHENTICATION (เข้าสู่ระบบ นักเรียน & ผู้ดูแลระบบ) -->
+    <!-- ============================================================== -->
+    <section id="view-auth" class="view-section active">
+      <div class="auth-wrapper">
+        <div class="auth-card">
+          <div class="auth-card-header">
+            <h2 class="text-xl font-bold">เข้าสู่ระบบการทดสอบ</h2>
+            <p class="text-xs text-indigo-200 mt-1">โรงเรียน ม.อ. วิทยานุสรณ์ (PSU Wittayanusorn)</p>
+          </div>
+
+          <div class="auth-card-body">
+            <!-- Tabs: Student / Admin -->
+            <div class="auth-tabs">
+              <button type="button" class="auth-tab-btn active" data-role="student">
+                🎓 สำหรับนักเรียน
+              </button>
+              <button type="button" class="auth-tab-btn" data-role="admin">
+                🛡️ ผู้ดูแลระบบ (Admin)
+              </button>
+            </div>
+
+            <!-- Student Login Form -->
+            <form id="studentLoginForm">
+              <div class="form-group">
+                <label class="form-label" for="loginStudentEmail">อีเมลโรงเรียน (@psuwit.ac.th) *</label>
+                <input
+                  type="email"
+                  id="loginStudentEmail"
+                  class="form-control"
+                  placeholder="เช่น s641001@psuwit.ac.th หรือ somchai@psuwit.ac.th"
+                  required
+                >
+                <p class="form-help">⚠️ ต้องใช้อีเมลลงท้ายด้วย <strong>@psuwit.ac.th</strong> เท่านั้น</p>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="loginStudentName">ชื่อ - นามสกุล นักเรียน *</label>
+                <input
+                  type="text"
+                  id="loginStudentName"
+                  class="form-control"
+                  placeholder="เช่น เด็กชายกิตติศักดิ์ มณีโชติ"
+                  required
+                >
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="loginStudentGrade">ระดับชั้นมัธยมศึกษา *</label>
+                <select id="loginStudentGrade" class="form-control" required>
+                  <option value="ม.1">มัธยมศึกษาปีที่ 1 (ม.1)</option>
+                  <option value="ม.2">มัธยมศึกษาปีที่ 2 (ม.2)</option>
+                  <option value="ม.3">มัธยมศึกษาปีที่ 3 (ม.3)</option>
+                  <option value="ม.4">มัธยมศึกษาปีที่ 4 (ม.4)</option>
+                  <option value="ม.5">มัธยมศึกษาปีที่ 5 (ม.5)</option>
+                  <option value="ม.6">มัธยมศึกษาปีที่ 6 (ม.6)</option>
+                </select>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+                เข้าสู่ระบบเพื่อเริ่มทดสอบ 🚀
+              </button>
+            </form>
+
+            <!-- Admin Login Form -->
+            <form id="adminLoginForm" class="hidden">
+              <div class="form-group">
+                <label class="form-label" for="loginAdminPasscode">รหัสผ่านผู้ดูแลระบบ (Admin Passcode) *</label>
+                <input
+                  type="password"
+                  id="loginAdminPasscode"
+                  class="form-control"
+                  placeholder="กรอกรหัสผ่าน (ค่าเริ่มต้น: admin1234)"
+                  required
+                >
+                <p class="form-help">รหัสผ่านเริ่มต้นสำหรับการทดสอบระบบ: <code>admin1234</code></p>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+                เข้าสู่ระบบแดชบอร์ด Admin 🛡️
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- VIEW 2: STUDENT PORTAL (หน้าพอร์ทัลนักเรียน - เลือกสอบ Pre/Post) -->
+    <!-- ============================================================== -->
+    <section id="view-student-portal" class="view-section">
+      <div style="max-width: 1000px; margin: 0 auto;">
+        <!-- Welcome Card -->
+        <div class="stat-card mb-6" style="background: linear-gradient(135deg, #1E1B4B 0%, #312E81 100%); color: white;">
+          <div class="flex justify-between items-center">
+            <div>
+              <span class="badge" style="background: rgba(255,255,255,0.2); color: #FDE68A; margin-bottom: 0.5rem;">
+                พอร์ทัลนักเรียน
+              </span>
+              <h2 class="text-xl font-bold" id="portalStudentName">ชื่อนักเรียน</h2>
+              <p class="text-sm text-indigo-200 mt-1">
+                อีเมล: <span id="portalStudentEmail">-</span> | 
+                รหัสนักเรียน: <span id="portalStudentId">-</span> | 
+                ระดับชั้น: <span id="portalStudentGrade" class="font-bold text-amber-300">-</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2 Rounds Assessment Cards (Pre-test vs Post-test) -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
+          <!-- Card 1: Pre-test -->
+          <div class="stat-card" style="border-top: 4px solid var(--color-primary);">
+            <div class="flex justify-between items-center mb-2">
+              <span class="badge badge-primary font-bold">รอบที่ 1</span>
+              <div id="portalPreStatusBadge"><span class="badge badge-warning">ยังไม่ได้ทำ</span></div>
+            </div>
+            <h3 class="font-bold text-lg mb-1">แบบทดสอบก่อนเรียน (Pre-test)</h3>
+            <p class="text-sm text-slate-500 mb-4">
+              วัดระดับความรู้และสมรรถนะ IT พื้นฐานก่อนเข้าสู่กระบวนการเรียนรู้ (จำกัดเวลา 15 นาที)
+            </p>
+            <div class="text-xs text-slate-500 mb-4">
+              ผลคะแนนล่าสุด: <strong id="portalPreScoreText" class="text-slate-800">ยังไม่มีคะแนน</strong>
+            </div>
+            <button id="btnStartPretest" class="btn btn-primary" style="width: 100%;">
+              🚀 เริ่มทำแบบทดสอบก่อนเรียน (Pre-test)
+            </button>
+          </div>
+
+          <!-- Card 2: Post-test -->
+          <div class="stat-card" style="border-top: 4px solid var(--color-emerald);">
+            <div class="flex justify-between items-center mb-2">
+              <span class="badge badge-success font-bold">รอบที่ 2</span>
+              <div id="portalPostStatusBadge"><span class="badge badge-secondary">รอทำหลังเรียน</span></div>
+            </div>
+            <h3 class="font-bold text-lg mb-1">แบบทดสอบหลังเรียน (Post-test)</h3>
+            <p class="text-sm text-slate-500 mb-4">
+              วัดการพัฒนาสมรรถนะดิจิทัลหลังผ่านการเรียน หากผ่านเกณฑ์ 60% ขึ้นไปจะได้รับเกียรติบัตร (PDF)
+            </p>
+            <div class="text-xs text-slate-500 mb-4">
+              ผลคะแนนล่าสุด: <strong id="portalPostScoreText" class="text-slate-800">ยังไม่มีคะแนน</strong>
+            </div>
+            <button id="btnStartPosttest" class="btn btn-primary" style="width: 100%; background: linear-gradient(135deg, #059669, #10B981);">
+              🎯 เริ่มทำแบบทดสอบหลังเรียน (Post-test)
+            </button>
+          </div>
+        </div>
+
+        <!-- Section: Past History & Comparative Spider Radar -->
+        <div id="portalHistorySection" class="stat-card hidden">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-lg">📊 กราฟใยแมงมุมสมรรถนะของคุณ (IT Competency Radar)</h3>
+            <span class="text-xs text-slate-400">เปรียบเทียบ Pre-test vs Post-test</span>
+          </div>
+          <div style="height: 380px; position: relative;">
+            <canvas id="portalRadarChartCanvas"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- VIEW 3: ASSESSMENT ARENA (ห้องสอบ - ตรวจจับทุจริต & จับเวลา) -->
+    <!-- ============================================================== -->
+    <section id="view-assessment" class="view-section">
+      <div class="assessment-container">
+        <!-- Safety Alert Banner (Anti-Cheat Violation Notification) -->
+        <div id="examViolationBanner" class="safety-bar hidden">
+          <div>
+            ⚠️ ตรวจพบการสลับหน้าต่างหรือแท็บเบราว์เซอร์! 
+            (การเตือนครั้งที่: <span id="examViolationCount" class="font-bold">1 / 3</span>)
+          </div>
+          <div class="text-xs">ห้ามสลับจอ มิฉะนั้นระบบจะส่งข้อสอบทันที</div>
+        </div>
+
+        <!-- Exam Header Bar -->
+        <div class="exam-header-bar">
+          <div>
+            <h2 id="examHeaderTitle" class="text-lg font-bold text-slate-900">แบบทดสอบสมรรถนะ IT</h2>
+            <p class="text-xs text-slate-500">ตอบได้ตามความเป็นจริง โดยข้อคำตอบมีระดับความถูกต้อง 1-5 คะแนน</p>
+          </div>
+          <div class="exam-timer-wrapper">
+            <span class="text-xs text-slate-400 font-semibold">เวลาที่เหลือ</span>
+            <div id="examTimerDisplay" class="exam-timer-box">15:00</div>
+          </div>
+        </div>
+
+        <!-- Progress Bar for Timer -->
+        <div class="w-full bg-slate-200 rounded-full h-1.5 mb-4 overflow-hidden">
+          <div id="examTimeProgress" class="h-1.5 bg-indigo-600 transition-all duration-300" style="width: 0%;"></div>
+        </div>
+
+        <!-- Question Navigation Buttons -->
+        <div id="examQuestionNav" class="q-nav-grid"></div>
+
+        <!-- Active Question Card -->
+        <div id="examCurrentQuestionCard" class="question-card"></div>
+
+        <!-- Submit Button Bottom -->
+        <div class="flex justify-end mt-4">
+          <button id="btnSubmitAssessment" class="btn btn-primary" style="background: linear-gradient(135deg, #059669, #10B981);">
+            ตรวจทานและส่งคำตอบ 🚀
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- VIEW 4: RESULTS & CERTIFICATE (รายงานผล & กราฟใยแมงมุม & เกียรติบัตร) -->
+    <!-- ============================================================== -->
+    <section id="view-results" class="view-section">
+      <div style="max-width: 1040px; margin: 0 auto;">
+        
+        <!-- Result Summary Banner -->
+        <div class="stat-card mb-6" style="background: linear-gradient(135deg, #0B132B 0%, #1C2541 100%); color: white;">
+          <div class="flex justify-between items-center">
+            <div>
+              <span class="badge badge-success mb-2">บันทึกผลการทดสอบสำเร็จ</span>
+              <h2 class="text-2xl font-bold">รายงานผลการประเมินสมรรถนะ IT</h2>
+              <p class="text-sm text-slate-300 mt-1">
+                ผู้รับการทดสอบ: <strong id="resStudentName" class="text-white">-</strong> 
+                | ระดับชั้น: <strong id="resStudentGrade" class="text-amber-300">-</strong>
+                | รอบการทดสอบ: <strong id="resTestType" class="text-indigo-300">-</strong>
+              </p>
+            </div>
+            <div class="text-right">
+              <div class="text-xs text-slate-400 uppercase tracking-wide">คะแนนรวมที่ได้</div>
+              <div id="resPercentScore" class="text-3xl font-bold text-amber-400">0%</div>
+              <div id="resTotalScore" class="text-xs text-slate-300">0 / 30 คะแนน</div>
+              <div id="resLevelText" class="text-xs text-emerald-400 font-semibold mt-1">-</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Radar Spider Chart & Domain Breakdown -->
+        <div class="grid grid-cols-2 gap-6 mb-6">
+          <!-- Spider Chart Box -->
+          <div class="stat-card">
+            <h3 class="font-bold text-base mb-3 flex items-center justify-between">
+              <span>🕸️ กราฟใยแมงมุมแสดงสมรรถนะ (Radar Chart)</span>
+              <span class="text-xs text-slate-400">คะแนนเต็ม 100% ต่อด้าน</span>
+            </h3>
+            <div style="height: 340px; position: relative;">
+              <canvas id="resultRadarChartCanvas"></canvas>
+            </div>
+          </div>
+
+          <!-- 6 IT Competency Domain Cards -->
+          <div>
+            <h3 class="font-bold text-base mb-3">📋 จำแนกคะแนนตาม 6 ด้านสมรรถนะ IT</h3>
+            <div id="resultDomainCardsContainer" class="grid grid-cols-2 gap-3"></div>
+          </div>
+        </div>
+
+        <!-- Certificate Download Section -->
+        <div id="resultCertificateNotice" class="mb-6 hidden"></div>
+
+        <div id="resultCertificateCard" class="stat-card mb-6 hidden" style="border: 2px solid #F59E0B;">
+          <div class="flex justify-between items-center mb-4">
+            <div>
+              <span class="badge badge-warning font-bold">🎉 ยินดีด้วย คุณผ่านเกณฑ์การทดสอบ</span>
+              <h3 class="text-xl font-bold text-slate-900 mt-1">เกียรติบัตรอิเล็กทรอนิกส์ (E-Certificate)</h3>
+              <p class="text-xs text-slate-500">สามารถดาวน์โหลดเป็นไฟล์ PDF คุณภาพสูง (300 DPI) เพื่อใช้ประกอบแฟ้มสะสมงาน (Portfolio)</p>
+            </div>
+            <button id="btnDownloadCertificate" class="btn btn-gold">
+              📥 ดาวน์โหลดเกียรติบัตร (PDF)
+            </button>
+          </div>
+
+          <!-- Canvas Preview -->
+          <div class="certificate-preview-wrapper">
+            <canvas id="certificatePreviewCanvas" class="certificate-canvas"></canvas>
+          </div>
+        </div>
+
+        <!-- Navigation Buttons Bottom -->
+        <div class="flex justify-between items-center mt-6">
+          <button id="btnBackToPortal" class="btn btn-secondary">
+            ← กลับสู่หน้าหลักนักเรียน
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- VIEW 5: ADMIN DASHBOARD (ระบบจัดการและสถิติสำหรับผู้ดูแลระบบ) -->
+    <!-- ============================================================== -->
+    <section id="view-admin" class="view-section">
+      <div class="admin-layout">
+        
+        <!-- Admin Navigation Tabs -->
+        <div class="admin-nav">
+          <button class="admin-nav-item active" data-tab="dashboard">📊 Dashboard ภาพรวม</button>
+          <button class="admin-nav-item" data-tab="assessments">📑 รายงานผลการสอบ (แยกชั้น)</button>
+          <button class="admin-nav-item" data-tab="students">👥 จัดการรายชื่อนักเรียน (User)</button>
+          <button class="admin-nav-item" data-tab="settings">🗄️ จัดการฐานข้อมูล (Database)</button>
+        </div>
+
+        <!-- Tab 1: Dashboard -->
+        <div id="adminPane-dashboard" class="admin-tab-pane active">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">นักเรียนในระบบทั้งหมด</div>
+              <div id="statTotalStudents" class="stat-value">0</div>
+              <span class="text-xs text-slate-400">ระดับ ม.1 - ม.6</span>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">การสอบทั้งหมดที่บันทึกแล้ว</div>
+              <div id="statTotalTests" class="stat-value">0</div>
+              <span class="text-xs text-indigo-500 font-semibold">Pre-test & Post-test</span>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">คะแนนเฉลี่ย Pre-test</div>
+              <div id="statPreAvg" class="stat-value text-indigo-600">0%</div>
+              <span class="text-xs text-slate-400">ก่อนเริ่มเรียน</span>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">คะแนนเฉลี่ย Post-test</div>
+              <div id="statPostAvg" class="stat-value text-emerald-600">0%</div>
+              <span class="text-xs text-slate-400">หลังการเรียนรู้</span>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">อัตราผ่านเกณฑ์รับเกียรติบัตร</div>
+              <div id="statPassRate" class="stat-value text-amber-500">0%</div>
+              <span class="text-xs text-slate-400">เกณฑ์ 60% ขึ้นไป</span>
+            </div>
+          </div>
+
+          <!-- Overview Comparison Bar Chart -->
+          <div class="chart-container-box">
+            <h3 class="font-bold text-base mb-4">📈 เปรียบเทียบคะแนนเฉลี่ย Pre-test vs Post-test แยกตามระดับชั้น (ม.1 - ม.6)</h3>
+            <div style="height: 320px; position: relative;">
+              <canvas id="adminOverviewChartCanvas"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Assessments Report Table -->
+        <div id="adminPane-assessments" class="admin-tab-pane">
+          <!-- Filter & Export Toolbar -->
+          <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
+              <!-- Filter by Grade (3.2 แยกข้อมูลเป็นระดับชั้นได้) -->
+              <label for="adminGradeFilter" class="text-sm font-semibold">เลือกระดับชั้น:</label>
+              <select id="adminGradeFilter" class="form-control" style="width: auto; padding: 0.4rem 0.8rem;">
+                <option value="all">ทุกระดับชั้น (ม.1 - ม.6)</option>
+                <option value="ม.1">มัธยมศึกษาปีที่ 1 (ม.1)</option>
+                <option value="ม.2">มัธยมศึกษาปีที่ 2 (ม.2)</option>
+                <option value="ม.3">มัธยมศึกษาปีที่ 3 (ม.3)</option>
+                <option value="ม.4">มัธยมศึกษาปีที่ 4 (ม.4)</option>
+                <option value="ม.5">มัธยมศึกษาปีที่ 5 (ม.5)</option>
+                <option value="ม.6">มัธยมศึกษาปีที่ 6 (ม.6)</option>
+              </select>
+
+              <!-- Search Box -->
+              <input
+                type="text"
+                id="adminSearchInput"
+                class="form-control"
+                placeholder="🔍 ค้นหาชื่อ, รหัสนักเรียน, อีเมล..."
+                style="width: 250px; padding: 0.4rem 0.8rem;"
+              >
+            </div>
+
+            <!-- Export Button (3.2 Export หรือ Download ในแต่ละระดับชั้นได้) -->
+            <button id="btnExportCsv" class="btn btn-primary btn-sm">
+              📥 Export ข้อมูล CSV (Excel ภาษาไทย)
+            </button>
+          </div>
+
+          <!-- Table Container -->
+          <div class="table-responsive">
+            <table class="app-table">
+              <thead>
+                <tr>
+                  <th class="text-center">#</th>
+                  <th>ผู้เข้าทดสอบ</th>
+                  <th>ระดับชั้น</th>
+                  <th>ประเภท</th>
+                  <th class="text-center">คะแนนรวม</th>
+                  <th class="text-center">ผลการประเมิน</th>
+                  <th class="text-center">สลับหน้าต่าง</th>
+                  <th class="text-center">วันที่ทำแบบทดสอบ</th>
+                  <th class="text-center">การจัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="adminAssessmentsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 3: Student Management (3.4 จัดการข้อมูล user ได้) -->
+        <div id="adminPane-students" class="admin-tab-pane">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-lg">รายชื่อผู้ใช้งานและนักเรียนในระบบ</h3>
+            <button class="btn btn-primary btn-sm" onclick="AdminController.openAddStudent()">
+              ➕ เพิ่มนักเรียนใหม่
+            </button>
+          </div>
+
+          <div class="table-responsive">
+            <table class="app-table">
+              <thead>
+                <tr>
+                  <th class="text-center">#</th>
+                  <th>รหัสนักเรียน</th>
+                  <th>ชื่อ-นามสกุล</th>
+                  <th>อีเมล (@psuwit.ac.th)</th>
+                  <th class="text-center">ระดับชั้น</th>
+                  <th class="text-center">Pre / Post Test</th>
+                  <th class="text-center">สถานะ</th>
+                  <th class="text-center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="adminStudentsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 4: Database System & Management (ระบบจัดการฐานข้อมูล SQLite / IndexedDB / SQL Dump) -->
+        <div id="adminPane-settings" class="admin-tab-pane">
+          <div class="grid grid-cols-2 gap-6 mb-6">
+            <!-- Card 1: สถานะฐานข้อมูลปัจจุบัน -->
+            <div class="stat-card">
+              <div class="flex justify-between items-center mb-3">
+                <h3 class="font-bold text-lg">🗄️ สถานะระบบฐานข้อมูล (Database Engine)</h3>
+                <span id="dbStatusBadge" class="badge badge-success">เชื่อมต่อแล้ว (Active)</span>
+              </div>
+              <p class="text-xs text-slate-500 mb-4">
+                ระบบจัดเก็บข้อมูลในรูปแบบฐานข้อมูลเชิงสัมพันธ์ (Relational Database: SQLite 3 + IndexedDB) พร้อมโครงสร้างตารางมาตรฐาน SQL
+              </p>
+
+              <div class="space-y-2 text-sm bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
+                <div class="flex justify-between">
+                  <span class="text-slate-500">Database Engine:</span>
+                  <strong id="dbInfoEngine" class="text-indigo-700">SQLite 3 (Relational Database)</strong>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-500">ตำแหน่งจัดเก็บฐานข้อมูล:</span>
+                  <code id="dbInfoFile" class="text-xs bg-white px-2 py-0.5 rounded border">database/psuwit_it.sqlite</code>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-500">ตาราง <code>students</code> (ผู้เข้าสอบ):</span>
+                  <strong id="dbInfoStudentsCount" class="text-slate-800">0 รายการ</strong>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-500">ตาราง <code>assessments</code> (ผลสอบ):</span>
+                  <strong id="dbInfoAssessmentsCount" class="text-slate-800">0 รายการ</strong>
+                </div>
+              </div>
+
+              <!-- Backup / Export / Restore Controls -->
+              <div class="font-semibold text-xs text-slate-500 uppercase tracking-wider mb-2">
+                การสำรองและจัดการฐานข้อมูล (Backup &amp; Restore)
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button type="button" id="btnExportDbSql" class="btn btn-primary btn-sm">
+                  📥 ดาวน์โหลด SQL Dump (.sql)
+                </button>
+                <button type="button" id="btnExportDbJson" class="btn btn-secondary btn-sm">
+                  📦 สำรองฐานข้อมูล (.json)
+                </button>
+                <label class="btn btn-secondary btn-sm" style="cursor: pointer; margin: 0;">
+                  📤 นำเข้าฐานข้อมูล (.json)
+                  <input type="file" id="inputImportDbJson" accept=".json" class="hidden">
+                </label>
+                <button type="button" id="btnResetSeedDb" class="btn btn-secondary btn-sm text-red-500">
+                  🔄 รีเซ็ตข้อมูลเริ่มต้น (Seed DB)
+                </button>
+              </div>
+            </div>
+
+            <!-- Card 2: โครงสร้างตารางฐานข้อมูล (Database Schema) -->
+            <div class="stat-card">
+              <h3 class="font-bold text-lg mb-2">📐 โครงสร้างตารางฐานข้อมูล (Relational Schema)</h3>
+              <p class="text-xs text-slate-500 mb-3">
+                ไฟล์โครงสร้างมาตรฐาน: <code>database/schema.sql</code> (รองรับ SQLite, MySQL, PostgreSQL)
+              </p>
+
+              <div class="space-y-3 text-xs">
+                <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
+                  <div class="font-bold text-indigo-900 mb-1">1. ตาราง <code>students</code> (ข้อมูลนักเรียน)</div>
+                  <div class="text-indigo-800 leading-relaxed">
+                    <code>id (PK)</code>, <code>student_id</code>, <code>name</code>, <code>email (UNIQUE)</code>, <code>grade</code>, <code>status</code>, <code>pretest_completed</code>, <code>posttest_completed</code>, <code>created_at</code>, <code>updated_at</code>
+                  </div>
+                </div>
+
+                <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                  <div class="font-bold text-emerald-900 mb-1">2. ตาราง <code>assessments</code> (ผลการทดสอบสมรรถนะ 6 ด้าน)</div>
+                  <div class="text-emerald-800 leading-relaxed">
+                    <code>id (PK)</code>, <code>test_id (UNIQUE)</code>, <code>student_id</code>, <code>student_name</code>, <code>email (FK)</code>, <code>grade</code>, <code>test_type</code>, <code>score_total</code>, <code>max_score</code>, <code>score_percent</code>, <code>d1_score..d6_score</code>, <code>time_spent_seconds</code>, <code>violations_count</code>, <code>passed</code>, <code>submitted_at</code>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: เชื่อมต่อ Cloud Database / Google Sheets Webhook เสริม -->
+          <div class="stat-card" style="max-width: 800px;">
+            <h3 class="font-bold text-base mb-1">☁️ เชื่อมต่อ Cloud Sync เสริม (External Database / Google Sheets API)</h3>
+            <p class="text-xs text-slate-500 mb-4">
+              นอกเหนือจากฐานข้อมูลหลักในระบบแล้ว คุณยังสามารถตั้งค่าซิงก์ข้อมูลอัตโนมัติไปยัง Google Sheets หรือ Cloud Webhook ได้อีกด้วย
+            </p>
+
+            <div class="form-group">
+              <label class="form-label" for="settingsGasUrl">External Webhook / Google Apps Script Web App URL (ตัวเลือกเสริม)</label>
+              <input
+                type="url"
+                id="settingsGasUrl"
+                class="form-control"
+                placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+              >
+              <div id="gasStatusFeedback" class="mt-2 text-sm font-semibold"></div>
+            </div>
+
+            <div class="flex gap-2 mt-4">
+              <button id="btnTestGas" class="btn btn-secondary btn-sm">
+                🔌 ทดสอบการเชื่อมต่อ (Ping)
+              </button>
+              <button id="btnSaveGas" class="btn btn-primary btn-sm">
+                💾 บันทึกการตั้งค่า
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============================================================== -->
+  <!-- MODAL: ADD / EDIT STUDENT -->
+  <!-- ============================================================== -->
+  <div id="studentModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="studentModalTitle" class="text-lg font-bold">ข้อมูลนักเรียน</h3>
+        <button class="modal-close" onclick="document.getElementById('studentModal').classList.remove('active')">&times;</button>
+      </div>
+      <form id="studentManageForm">
+        <div class="form-group">
+          <label class="form-label" for="formStudentId">รหัสนักเรียน</label>
+          <input type="text" id="formStudentId" class="form-control" placeholder="เช่น s641001" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="formStudentName">ชื่อ-นามสกุล</label>
+          <input type="text" id="formStudentName" class="form-control" placeholder="เช่น เด็กชายกิตติศักดิ์ มณีโชติ" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="formStudentEmail">อีเมลโรงเรียน (@psuwit.ac.th)</label>
+          <input type="email" id="formStudentEmail" class="form-control" placeholder="เช่น s641001@psuwit.ac.th" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="formStudentGrade">ระดับชั้น</label>
+          <select id="formStudentGrade" class="form-control">
+            <option value="ม.1">มัธยมศึกษาปีที่ 1 (ม.1)</option>
+            <option value="ม.2">มัธยมศึกษาปีที่ 2 (ม.2)</option>
+            <option value="ม.3">มัธยมศึกษาปีที่ 3 (ม.3)</option>
+            <option value="ม.4">มัธยมศึกษาปีที่ 4 (ม.4)</option>
+            <option value="ม.5">มัธยมศึกษาปีที่ 5 (ม.5)</option>
+            <option value="ม.6">มัธยมศึกษาปีที่ 6 (ม.6)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="formStudentStatus">สถานะการทำงาน</label>
+          <select id="formStudentStatus" class="form-control">
+            <option value="active">พร้อมใช้งาน (Active)</option>
+            <option value="suspended">ระงับชั่วคราว (Suspended)</option>
+          </select>
+        </div>
+        <div class="flex justify-end gap-2 mt-4">
+          <button type="button" class="btn btn-secondary" onclick="document.getElementById('studentModal').classList.remove('active')">
+            ยกเลิก
+          </button>
+          <button type="submit" class="btn btn-primary">
+            บันทึกข้อมูล
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- MODAL: ASSESSMENT DETAIL WITH RADAR CHART -->
+  <!-- ============================================================== -->
+  <div id="assessmentDetailModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 720px;" id="assessmentDetailModalContent"></div>
+  </div>
+
+  <!-- Application Scripts in Order -->
+  <script src="js/config.js"></script>
+  <script src="js/questions.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/certificate.js"></script>
+  <script src="js/assessment.js"></script>
+  <script src="js/admin.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>
