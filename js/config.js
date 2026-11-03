@@ -17,7 +17,8 @@ const APP_CONFIG = {
   studentSsoRegex: /^[0-9]{4}@psuwit\.ac\.th$/i,
   orgEmailRegex: /^[a-zA-Z0-9._%+-]+@psuwit\.ac\.th$/i,
   emailRegex: /^[a-zA-Z0-9._%+-]+@psuwit\.ac\.th$/i,
-  adminEmails: ["admin@psuwit.ac.th", "itadmin@psuwit.ac.th"],
+  primaryAdminEmail: "winai@psuwit.ac.th",
+  adminEmails: ["winai@psuwit.ac.th"],
   defaultAdminPasscode: "admin1234",
   
   // การตั้งค่าการสอบ
@@ -34,6 +35,7 @@ const APP_CONFIG = {
     strictFourDigitId: "psu_wit_strict_4digit_id",
     students: "psu_wit_students_db",
     assessments: "psu_wit_assessments_db",
+    admins: "psu_wit_admins_db",
     currentUser: "psu_wit_current_user",
     currentRole: "psu_wit_current_role",
     systemSettings: "psu_wit_system_settings"

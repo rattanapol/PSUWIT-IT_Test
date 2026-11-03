@@ -53,7 +53,18 @@ CREATE INDEX IF NOT EXISTS idx_assessments_grade ON assessments(grade);
 CREATE INDEX IF NOT EXISTS idx_assessments_test_type ON assessments(test_type);
 CREATE INDEX IF NOT EXISTS idx_assessments_submitted_at ON assessments(submitted_at);
 
--- 3. ตารางตั้งค่าระบบ (system_settings)
+-- 3. ตารางรายชื่อผู้ดูแลระบบ (admins)
+CREATE TABLE IF NOT EXISTS admins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL,
+    role VARCHAR(50) NOT NULL DEFAULT 'admin', -- 'super_admin' หรือ 'admin'
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_admins_email ON admins(email);
+
+-- 4. ตารางตั้งค่าระบบ (system_settings)
 CREATE TABLE IF NOT EXISTS system_settings (
     setting_key VARCHAR(100) PRIMARY KEY,
     setting_value TEXT,

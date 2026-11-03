@@ -114,6 +114,15 @@ const INITIAL_ASSESSMENTS = [
   }
 ];
 
+const INITIAL_ADMINS = [
+  {
+    email: "winai@psuwit.ac.th",
+    name: "อาจารย์วินัย (ผู้ดูแลระบบหลัก)",
+    role: "super_admin",
+    created_at: "2026-05-01T08:00:00Z"
+  }
+];
+
 // ============================================================================
 // ระบบจัดการฐานข้อมูล SQLite 3 (Built-in node:sqlite)
 // ============================================================================
@@ -122,12 +131,23 @@ class DatabaseManager {
     const { DatabaseSync } = require('node:sqlite');
     this.db = new DatabaseSync(SQLITE_PATH);
     this.initSchema();
+    this.ensurePrimaryAdmin();
     this.seedIfEmpty();
   }
 
   initSchema() {
     const schemaSql = fs.readFileSync(SCHEMA_PATH, 'utf-8');
     this.db.exec(schemaSql);
+  }
+
+  ensurePrimaryAdmin() {
+    const insertAdmin = this.db.prepare(`
+      INSERT OR IGNORE INTO admins (email, name, role, created_at)
+      VALUES (?, ?, ?, ?)
+    `);
+    for (const a of INITIAL_ADMINS) {
+      insertAdmin.run(a.email.toLowerCase(), a.name, a.role, a.created_at);
+    }
   }
 
   seedIfEmpty() {
@@ -196,6 +216,7 @@ class DatabaseManager {
   getStatus() {
     const studentCount = this.db.prepare('SELECT COUNT(*) AS cnt FROM students').get().cnt;
     const assessmentCount = this.db.prepare('SELECT COUNT(*) AS cnt FROM assessments').get().cnt;
+    const adminCount = this.db.prepare('SELECT COUNT(*) AS cnt FROM admins').get().cnt;
     let fileSize = 0;
     try {
       fileSize = fs.statSync(SQLITE_PATH).size;
@@ -208,10 +229,39 @@ class DatabaseManager {
       file_size_bytes: fileSize,
       tables: {
         students: studentCount,
-        assessments: assessmentCount
+        assessments: assessmentCount,
+        admins: adminCount
       },
       timestamp: new Date().toISOString()
     };
+  }
+
+  getAdmins() {
+    this.ensurePrimaryAdmin();
+    return this.db.prepare('SELECT * FROM admins ORDER BY id ASC').all();
+  }
+
+  saveAdmin(data) {
+    const email = (data.email || '').trim().toLowerCase();
+    const name = (data.name || email.split('@')[0] || 'ผู้ดูแลระบบ').trim();
+    const role = email === 'winai@psuwit.ac.th' ? 'super_admin' : (data.role || 'admin');
+    const now = new Date().toISOString();
+
+    this.db.prepare(`
+      INSERT OR REPLACE INTO admins (email, name, role, created_at)
+      VALUES (?, ?, ?, ?)
+    `).run(email, name, role, data.created_at || now);
+
+    return this.db.prepare('SELECT * FROM admins WHERE LOWER(email) = ?').get(email);
+  }
+
+  deleteAdmin(email) {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (cleanEmail === 'winai@psuwit.ac.th') {
+      throw new Error('ไม่สามารถลบผู้ดูแลระบบหลัก (winai@psuwit.ac.th) ได้');
+    }
+    this.db.prepare('DELETE FROM admins WHERE LOWER(email) = ?').run(cleanEmail);
+    return true;
   }
 
   getStudents() {
@@ -542,6 +592,22 @@ const server = http.createServer(async (req, res) => {
         const body = await parseBody(req);
         const saved = dbManager.saveAssessment(body);
         return sendJson(res, 200, { status: 'success', data: saved });
+      }
+
+      if (pathname === '/api/admins' && req.method === 'GET') {
+        return sendJson(res, 200, { status: 'success', data: dbManager.getAdmins() });
+      }
+
+      if (pathname === '/api/admins' && req.method === 'POST') {
+        const body = await parseBody(req);
+        const saved = dbManager.saveAdmin(body);
+        return sendJson(res, 200, { status: 'success', data: saved });
+      }
+
+      if (pathname === '/api/admins' && req.method === 'DELETE') {
+        const email = query.email;
+        dbManager.deleteAdmin(email);
+        return sendJson(res, 200, { status: 'success', message: 'Deleted admin' });
       }
 
       if (pathname === '/api/database/export' && req.method === 'GET') {

@@ -6,13 +6,14 @@
 const App = {
   currentUser: null,       // { student_id, name, email, grade, role }
   pendingSsoSession: null, // { email, student_id, existingStudent }
+  _googleSignInMode: "student", // "student" | "admin"
   currentSession: null,    // Instance ของ AssessmentSession
   currentResult: null,     // ผลการสอบล่าสุด
   activeView: "view-auth",
 
   async init() {
     this.bindGlobalEvents();
-    this.checkSession();
+    await this.checkSession();
   },
 
   bindGlobalEvents() {
@@ -31,11 +32,34 @@ const App = {
       });
     });
 
-    // ขั้นตอนที่ 1: ปุ่มล็อกอินด้วย Gmail องค์กร (@psuwit.ac.th) ผ่าน Google OAuth / SSO
+    // ขั้นตอนที่ 1: ปุ่มล็อกอินด้วย Gmail องค์กร (@psuwit.ac.th) ผ่าน Google OAuth / SSO (สำหรับนักเรียน)
     const googleSignInBtn = document.getElementById("btnGoogleSignIn");
     if (googleSignInBtn) {
       googleSignInBtn.addEventListener("click", () => {
-        this.triggerGoogleSignIn();
+        this.triggerGoogleSignIn("student");
+      });
+    }
+
+    // ปุ่มล็อกอินผู้ดูแลระบบด้วย Google (@psuwit.ac.th - เฉพาะ winai@psuwit.ac.th หรือผู้ดูแลที่ได้รับสิทธิ์)
+    const adminGoogleBtn = document.getElementById("btnAdminGoogleSignIn");
+    if (adminGoogleBtn) {
+      adminGoogleBtn.addEventListener("click", () => {
+        this.triggerGoogleSignIn("admin");
+      });
+    }
+
+    // ปุ่มลิงก์เข้าสู่หน้าผู้ดูแลระบบบน Header (แสดงเฉพาะอีเมลที่มีสิทธิ์ Admin)
+    const headerAdminBtn = document.getElementById("btnHeaderAdminLink");
+    if (headerAdminBtn) {
+      headerAdminBtn.addEventListener("click", async () => {
+        if (!this.currentUser) return;
+        const adminRecord = await DB.findAdmin(this.currentUser.email);
+        if (!adminRecord) {
+          alert("🚫 เฉพาะผู้ใช้อีเมล winai@psuwit.ac.th หรือผู้ดูแลระบบที่ได้รับอนุญาตเท่านั้น");
+          return;
+        }
+        this.switchView("view-admin");
+        AdminController.init();
       });
     }
 
@@ -139,12 +163,20 @@ const App = {
   },
 
   // ตรวจสอบเซสชันเดิมที่เคยเข้าสู่ระบบไว้
-  checkSession() {
+  async checkSession() {
     const rawUser = localStorage.getItem(APP_CONFIG.storageKeys.currentUser);
     if (rawUser) {
       try {
         this.currentUser = JSON.parse(rawUser);
         if (this.currentUser.role === "admin") {
+          // ตรวจสอบว่าอีเมลนี้ยังมีสิทธิ์อยู่ในตารางผู้ดูแลระบบหรือไม่
+          const adminRecord = await DB.findAdmin(this.currentUser.email);
+          if (!adminRecord) {
+            this.currentUser = null;
+            localStorage.removeItem(APP_CONFIG.storageKeys.currentUser);
+            this.switchView("view-auth");
+            return;
+          }
           this.switchView("view-admin");
           AdminController.init();
         } else {
@@ -160,29 +192,38 @@ const App = {
   },
 
   // สลับการแสดงผล View
-  switchView(viewId) {
+  async switchView(viewId) {
     this.activeView = viewId;
     document.querySelectorAll(".view-section").forEach((sec) => {
       sec.classList.toggle("active", sec.id === viewId);
     });
 
-    // ปรับ Header ผู้ใช้งาน
+    // ปรับ Header ผู้ใช้งาน และตรวจสอบสิทธิ์ลิงก์ผู้ดูแลระบบ
     const userBadge = document.getElementById("headerUserBadge");
+    const headerAdminBtn = document.getElementById("btnHeaderAdminLink");
     if (this.currentUser && viewId !== "view-auth") {
       if (userBadge) {
         userBadge.classList.remove("hidden");
         document.getElementById("headerUserName").textContent = this.currentUser.name || this.currentUser.email;
-        document.getElementById("headerUserRole").textContent = this.currentUser.role === "admin" ? "ผู้ดูแลระบบ (Admin)" : `${this.currentUser.grade || ""}`;
+        document.getElementById("headerUserRole").textContent = this.currentUser.role === "admin" ? `ผู้ดูแลระบบ (${this.currentUser.email})` : `${this.currentUser.grade || ""}`;
+      }
+      if (headerAdminBtn) {
+        const isAdmin = await DB.findAdmin(this.currentUser.email);
+        headerAdminBtn.classList.toggle("hidden", !isAdmin || viewId === "view-admin");
       }
     } else {
       if (userBadge) userBadge.classList.add("hidden");
+      if (headerAdminBtn) headerAdminBtn.classList.add("hidden");
     }
   },
 
-  // ขั้นตอนที่ 1: เริ่มต้นการล็อกอินผ่าน Gmail องค์กร (@psuwit.ac.th)
-  triggerGoogleSignIn() {
+  // เริ่มต้นการล็อกอินผ่าน Gmail องค์กร (@psuwit.ac.th) สำหรับทั้ง นักเรียน และ ผู้ดูแลระบบ
+  triggerGoogleSignIn(mode = "student") {
+    this._googleSignInMode = mode;
     const errBanner = document.getElementById("googleAuthErrorBanner");
     if (errBanner) errBanner.classList.add("hidden");
+    const adminErrBanner = document.getElementById("adminAuthErrorBanner");
+    if (adminErrBanner) adminErrBanner.classList.add("hidden");
 
     const clientId = DB.getGoogleClientId();
 
@@ -201,7 +242,11 @@ const App = {
                   headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
                 });
                 const userInfo = await res.json();
-                await this.verifyGoogleAccountAndProceed(userInfo.email, userInfo.name || "");
+                if (this._googleSignInMode === "admin") {
+                  await this.verifyAdminAccountAndProceed(userInfo.email, userInfo.name || "");
+                } else {
+                  await this.verifyGoogleAccountAndProceed(userInfo.email, userInfo.name || "");
+                }
               } catch (err) {
                 this.showGoogleAuthError("ไม่สามารถดึงข้อมูลบัญชีจาก Google ได้ กรุณาลองใหม่อีกครั้ง");
               }
@@ -216,15 +261,18 @@ const App = {
     }
 
     // เปิดหน้าต่างล็อกอิน Google Workspace (@psuwit.ac.th)
-    this.openGoogleModal();
+    this.openGoogleModal(mode);
   },
 
-  openGoogleModal() {
+  openGoogleModal(mode = "student") {
     const modal = document.getElementById("googleOAuthModal");
     if (!modal) return;
 
+    this._googleSignInMode = mode;
     this._pendingGoogleEmail = "";
-    document.getElementById("googleModalEmailInput").value = "";
+    const emailInput = document.getElementById("googleModalEmailInput");
+    emailInput.value = "";
+    emailInput.placeholder = mode === "admin" ? "เช่น winai@psuwit.ac.th" : "เช่น 1001@psuwit.ac.th";
     document.getElementById("googleModalPasswordInput").value = "";
     document.getElementById("googleModalEmailError").classList.add("hidden");
     document.getElementById("googleModalPasswordError").classList.add("hidden");
@@ -233,7 +281,7 @@ const App = {
 
     modal.classList.add("active");
     setTimeout(() => {
-      document.getElementById("googleModalEmailInput").focus();
+      emailInput.focus();
     }, 100);
   },
 
@@ -289,17 +337,48 @@ const App = {
 
     errEl.classList.add("hidden");
     this.closeGoogleModal();
-    await this.verifyGoogleAccountAndProceed(this._pendingGoogleEmail, "");
+    if (this._googleSignInMode === "admin") {
+      await this.verifyAdminAccountAndProceed(this._pendingGoogleEmail, "");
+    } else {
+      await this.verifyGoogleAccountAndProceed(this._pendingGoogleEmail, "");
+    }
   },
 
   showGoogleAuthError(msg) {
-    const errBanner = document.getElementById("googleAuthErrorBanner");
+    const targetId = this._googleSignInMode === "admin" ? "adminAuthErrorBanner" : "googleAuthErrorBanner";
+    const errBanner = document.getElementById(targetId);
     if (errBanner) {
       errBanner.textContent = msg;
       errBanner.classList.remove("hidden");
     } else {
       alert(msg);
     }
+  },
+
+  // ตรวจสอบสิทธิ์ผู้ดูแลระบบ (อนุญาตเฉพาะ winai@psuwit.ac.th หรือผู้ดูแลที่ถูกเพิ่มในระบบเท่านั้น)
+  async verifyAdminAccountAndProceed(rawEmail, googleDisplayName = "") {
+    const emailInput = (rawEmail || "").trim().toLowerCase();
+
+    if (!emailInput.endsWith("@psuwit.ac.th")) {
+      this.showGoogleAuthError(`❌ บัญชี ${emailInput} ไม่ใช่เมลองค์กร (@psuwit.ac.th)`);
+      return;
+    }
+
+    const adminRecord = await DB.findAdmin(emailInput);
+    if (!adminRecord) {
+      this.showGoogleAuthError(`🚫 ปฏิเสธการเข้าถึง: บัญชี "${emailInput}" ไม่มีสิทธิ์เข้าใช้งานส่วนผู้ดูแลระบบ (เฉพาะ winai@psuwit.ac.th หรือผู้ดูแลที่ได้รับอนุญาตเท่านั้น)`);
+      return;
+    }
+
+    this.currentUser = {
+      name: adminRecord.name || googleDisplayName || emailInput,
+      email: adminRecord.email,
+      role: "admin",
+      adminRole: adminRecord.role || "admin"
+    };
+    localStorage.setItem(APP_CONFIG.storageKeys.currentUser, JSON.stringify(this.currentUser));
+    this.switchView("view-admin");
+    AdminController.init();
   },
 
   // ตรวจสอบบัญชี Gmail องค์กร (@psuwit.ac.th) ที่ผ่านการยืนยันตัวตนแล้ว และเปิดให้ระบุชื่อ-ระดับชั้น

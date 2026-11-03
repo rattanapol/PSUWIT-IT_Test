@@ -38,6 +38,9 @@
           <div id="headerUserName" class="user-name">นักเรียน</div>
           <div id="headerUserRole" class="user-role">มัธยมศึกษาปีที่ 1</div>
         </div>
+        <button id="btnHeaderAdminLink" class="btn btn-sm btn-primary hidden" title="เข้าสู่หน้าผู้ดูแลระบบ">
+          🛡️ ผู้ดูแลระบบ
+        </button>
         <button class="btn btn-sm btn-secondary btn-logout" title="ออกจากระบบ">
           ออกจากระบบ
         </button>
@@ -179,24 +182,54 @@
 
             </div>
 
-            <!-- Admin Login Form -->
-            <form id="adminLoginForm" class="hidden">
-              <div class="form-group">
-                <label class="form-label" for="loginAdminPasscode">รหัสผ่านผู้ดูแลระบบ (Admin Passcode) *</label>
-                <input
-                  type="password"
-                  id="loginAdminPasscode"
-                  class="form-control"
-                  placeholder="กรอกรหัสผ่าน (ค่าเริ่มต้น: admin1234)"
-                  required
-                >
-                <p class="form-help">รหัสผ่านเริ่มต้นสำหรับการทดสอบระบบ: <code>admin1234</code></p>
+            <!-- Admin Login Container (เฉพาะ winai@psuwit.ac.th หรือผู้ดูแลระบบที่ได้รับอนุญาตเท่านั้น) -->
+            <div id="adminLoginForm" class="hidden">
+              <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl mb-4 flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-bold text-amber-900">🛡️ เข้าสู่ระบบผู้ดูแลระบบ (Admin Only)</div>
+                  <div class="text-xs text-amber-800 mt-0.5">จำกัดสิทธิ์เฉพาะอีเมลผู้ดูแลระบบที่ได้รับอนุญาตเท่านั้น</div>
+                </div>
+                <span class="badge badge-warning">Admin</span>
               </div>
 
-              <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
-                เข้าสู่ระบบแดชบอร์ด Admin 🛡️
-              </button>
-            </form>
+              <!-- Error Banner when non-admin email tries to access -->
+              <div id="adminAuthErrorBanner" class="hidden p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold"></div>
+
+              <div class="p-5 bg-slate-50 border border-slate-200 rounded-2xl text-center mb-3">
+                <div class="mx-auto mb-3 flex items-center justify-center" style="width: 48px; height: 48px; border-radius: 50%; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                  <svg width="24" height="24" viewBox="0 0 48 48">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                  </svg>
+                </div>
+                <div class="font-bold text-slate-800 text-sm mb-1">ยืนยันตัวตนผู้ดูแลระบบด้วย Google</div>
+                <p class="text-xs text-slate-500 mb-4">
+                  เข้าใช้งานได้เฉพาะบัญชีผู้ดูแลระบบ เช่น <code class="text-indigo-600 font-bold">winai@psuwit.ac.th</code><br>
+                  หรืออีเมลผู้ดูแลระบบที่ถูกเพิ่มไว้ในฐานข้อมูลเท่านั้น
+                </p>
+
+                <button
+                  type="button"
+                  id="btnAdminGoogleSignIn"
+                  class="btn"
+                  style="width: 100%; background: #ffffff; color: #1e293b; border: 1.5px solid #cbd5e1; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; padding: 0.75rem 1rem; box-shadow: 0 2px 6px rgba(15,23,42,0.06);"
+                >
+                  <svg width="20" height="20" viewBox="0 0 48 48">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                  </svg>
+                  <span>เข้าสู่ระบบ Admin ด้วย Google (@psuwit.ac.th)</span>
+                </button>
+              </div>
+
+              <p class="form-help text-center">
+                🔒 เฉพาะผู้ใช้อีเมล <strong>winai@psuwit.ac.th</strong> และผู้ดูแลที่ได้รับสิทธิ์เท่านั้น
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -410,6 +443,7 @@
           <button class="admin-nav-item active" data-tab="dashboard">📊 Dashboard ภาพรวม</button>
           <button class="admin-nav-item" data-tab="assessments">📑 รายงานผลการสอบ (แยกชั้น)</button>
           <button class="admin-nav-item" data-tab="students">👥 จัดการรายชื่อนักเรียน (User)</button>
+          <button class="admin-nav-item" data-tab="admins">🛡️ จัดการผู้ดูแลระบบ (Admin)</button>
           <button class="admin-nav-item" data-tab="settings">🗄️ จัดการฐานข้อมูล (Database)</button>
         </div>
 
@@ -531,6 +565,78 @@
               </thead>
               <tbody id="adminStudentsTableBody"></tbody>
             </table>
+          </div>
+        </div>
+
+        <!-- Tab 3.5: Admin Management (จัดการผู้ดูแลระบบ เพิ่ม/ลบ ผู้ดูแล) -->
+        <div id="adminPane-admins" class="admin-tab-pane">
+          <div class="grid grid-cols-2 gap-6 mb-6">
+            <!-- ฟอร์มเพิ่มผู้ดูแลระบบใหม่ -->
+            <div class="stat-card">
+              <h3 class="font-bold text-lg mb-1">➕ เพิ่มผู้ดูแลระบบใหม่ (Add Admin)</h3>
+              <p class="text-xs text-slate-500 mb-4">
+                กำหนดสิทธิ์ให้อีเมลองค์กร (<code>@psuwit.ac.th</code>) สามารถเข้าใช้งานหน้าผู้ดูแลระบบได้
+              </p>
+
+              <form id="adminAddManageForm">
+                <div class="form-group">
+                  <label class="form-label" for="newAdminEmail">อีเมลผู้ดูแลระบบ (@psuwit.ac.th) *</label>
+                  <input
+                    type="email"
+                    id="newAdminEmail"
+                    class="form-control"
+                    placeholder="เช่น teacher@psuwit.ac.th"
+                    required
+                  >
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="newAdminName">ชื่อ - นามสกุล ผู้ดูแลระบบ *</label>
+                  <input
+                    type="text"
+                    id="newAdminName"
+                    class="form-control"
+                    placeholder="เช่น อาจารย์สมชาย ใจดี"
+                    required
+                  >
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-sm mt-2">
+                  ➕ เพิ่มสิทธิ์ผู้ดูแลระบบ
+                </button>
+              </form>
+            </div>
+
+            <!-- คำอธิบายสิทธิ์ผู้ดูแลระบบ -->
+            <div class="stat-card">
+              <h3 class="font-bold text-lg mb-2">🛡️ นโยบายความปลอดภัยผู้ดูแลระบบ</h3>
+              <div class="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-2 leading-relaxed">
+                <div>👑 <strong>ผู้ดูแลระบบหลัก (Super Admin):</strong> <code>winai@psuwit.ac.th</code></div>
+                <div>• เฉพาะผู้ที่มีรายชื่ออีเมลอยู่ในตารางผู้ดูแลระบบด้านล่างนี้เท่านั้น ที่สามารถล็อกอินเข้าสู่แดชบอร์ดผู้ดูแลระบบได้</div>
+                <div>• บัญชีหลัก <code>winai@psuwit.ac.th</code> ได้รับการคุ้มครองในระบบ ไม่สามารถถูกลบสิทธิ์ได้</div>
+                <div>• ผู้ดูแลระบบที่ถูกเพิ่มใหม่ต้องใช้อีเมลองค์กรที่ลงท้ายด้วย <code>@psuwit.ac.th</code> เท่านั้น</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ตารางรายชื่อผู้ดูแลระบบ -->
+          <div class="stat-card">
+            <h3 class="font-bold text-base mb-3">📋 รายชื่อผู้ดูแลระบบที่มีสิทธิ์เข้าใช้งาน</h3>
+            <div class="table-responsive">
+              <table class="app-table">
+                <thead>
+                  <tr>
+                    <th class="text-center">#</th>
+                    <th>ชื่อ - นามสกุล</th>
+                    <th>อีเมล (@psuwit.ac.th)</th>
+                    <th class="text-center">ระดับสิทธิ์</th>
+                    <th class="text-center">วันที่เพิ่ม</th>
+                    <th class="text-center">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody id="adminAdminsTableBody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
 

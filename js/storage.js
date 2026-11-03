@@ -99,12 +99,21 @@ const INITIAL_SEED_ASSESSMENTS = [
   }
 ];
 
+const INITIAL_SEED_ADMINS = [
+  {
+    email: "winai@psuwit.ac.th",
+    name: "อาจารย์วินัย (ผู้ดูแลระบบหลัก)",
+    role: "super_admin",
+    created_at: "2026-05-01T08:00:00Z"
+  }
+];
+
 // ============================================================================
 // IndexedDB Browser Relational Store
 // ============================================================================
 const IDBEngine = {
   dbName: "PSUWIT_IT_Database",
-  dbVersion: 1,
+  dbVersion: 2,
   _dbPromise: null,
 
   open() {
@@ -127,6 +136,9 @@ const IDBEngine = {
           assessStore.createIndex("grade", "grade", { unique: false });
           assessStore.createIndex("test_type", "test_type", { unique: false });
           assessStore.createIndex("submitted_at", "submitted_at", { unique: false });
+        }
+        if (!db.objectStoreNames.contains("admins")) {
+          db.createObjectStore("admins", { keyPath: "email" });
         }
       };
 
@@ -352,6 +364,104 @@ const DB = {
     if (idbAssessments.length === 0) {
       await IDBEngine.putBulk("assessments", JSON.parse(localStorage.getItem(APP_CONFIG.storageKeys.assessments) || "[]"));
     }
+
+    // เตรียมข้อมูลผู้ดูแลระบบเริ่มต้น (winai@psuwit.ac.th)
+    let rawAdmins = localStorage.getItem(APP_CONFIG.storageKeys.admins);
+    if (!rawAdmins) {
+      localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(INITIAL_SEED_ADMINS));
+    } else {
+      try {
+        const list = JSON.parse(rawAdmins);
+        if (!list.some((a) => a.email.toLowerCase() === "winai@psuwit.ac.th")) {
+          list.unshift(INITIAL_SEED_ADMINS[0]);
+          localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(list));
+        }
+      } catch (e) {}
+    }
+    const idbAdmins = await IDBEngine.getAll("admins");
+    if (idbAdmins.length === 0) {
+      await IDBEngine.putBulk("admins", JSON.parse(localStorage.getItem(APP_CONFIG.storageKeys.admins) || "[]"));
+    }
+  },
+
+  // ดึงรายชื่อผู้ดูแลระบบทั้งหมด
+  async getAdmins() {
+    try {
+      const res = await fetch("/api/admins");
+      if (res.ok) {
+        const json = await res.json();
+        if (json.status === "success" && Array.isArray(json.data)) {
+          localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(json.data));
+          await IDBEngine.putBulk("admins", json.data);
+          return json.data;
+        }
+      }
+    } catch (e) {}
+
+    let list = await IDBEngine.getAll("admins");
+    if (!list || list.length === 0) {
+      const raw = localStorage.getItem(APP_CONFIG.storageKeys.admins);
+      list = raw ? JSON.parse(raw) : [...INITIAL_SEED_ADMINS];
+    }
+    if (!list.some((a) => a.email.toLowerCase() === "winai@psuwit.ac.th")) {
+      list.unshift(INITIAL_SEED_ADMINS[0]);
+    }
+    return list;
+  },
+
+  // ตรวจสอบว่าอีเมลนี้มีสิทธิ์ผู้ดูแลระบบหรือไม่
+  async findAdmin(email) {
+    const cleanEmail = (email || "").trim().toLowerCase();
+    if (!cleanEmail) return null;
+    const admins = await this.getAdmins();
+    return admins.find((a) => a.email.toLowerCase() === cleanEmail) || null;
+  },
+
+  // เพิ่มผู้ดูแลระบบใหม่
+  async saveAdmin(adminData) {
+    const cleanEmail = (adminData.email || "").trim().toLowerCase();
+    const record = {
+      email: cleanEmail,
+      name: (adminData.name || cleanEmail.split("@")[0] || "ผู้ดูแลระบบ").trim(),
+      role: cleanEmail === "winai@psuwit.ac.th" ? "super_admin" : (adminData.role || "admin"),
+      created_at: adminData.created_at || new Date().toISOString()
+    };
+
+    try {
+      await fetch("/api/admins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(record)
+      });
+    } catch (e) {}
+
+    const admins = await this.getAdmins();
+    const idx = admins.findIndex((a) => a.email.toLowerCase() === cleanEmail);
+    if (idx >= 0) {
+      admins[idx] = { ...admins[idx], ...record };
+    } else {
+      admins.push(record);
+    }
+    localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(admins));
+    await IDBEngine.put("admins", record);
+    return record;
+  },
+
+  // ลบผู้ดูแลระบบ (ไม่อนุญาตให้ลบ winai@psuwit.ac.th)
+  async deleteAdmin(email) {
+    const cleanEmail = (email || "").trim().toLowerCase();
+    if (cleanEmail === "winai@psuwit.ac.th") {
+      throw new Error("ไม่สามารถลบผู้ดูแลระบบหลัก (winai@psuwit.ac.th) ได้");
+    }
+
+    try {
+      await fetch(`/api/admins?email=${encodeURIComponent(cleanEmail)}`, { method: "DELETE" });
+    } catch (e) {}
+
+    await IDBEngine.delete("admins", cleanEmail);
+    const admins = (await this.getAdmins()).filter((a) => a.email.toLowerCase() !== cleanEmail);
+    localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(admins));
+    return true;
   },
 
   // ดึงรายชื่อนักเรียนทั้งหมด

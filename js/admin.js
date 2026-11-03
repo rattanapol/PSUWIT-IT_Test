@@ -10,9 +10,10 @@
 const AdminController = {
   currentFilterGrade: "all",
   searchKeyword: "",
-  activeTab: "dashboard", // "dashboard" | "assessments" | "students" | "settings"
+  activeTab: "dashboard", // "dashboard" | "assessments" | "students" | "admins" | "settings"
   cachedAssessments: [],
   cachedStudents: [],
+  cachedAdmins: [],
   _eventsBound: false,
 
   async init() {
@@ -64,6 +65,15 @@ const AdminController = {
       studentForm.addEventListener("submit", (e) => {
         e.preventDefault();
         this.handleSaveStudent();
+      });
+    }
+
+    // ฟอร์มเพิ่มผู้ดูแลระบบใหม่
+    const adminAddForm = document.getElementById("adminAddManageForm");
+    if (adminAddForm) {
+      adminAddForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        this.handleAddAdmin();
       });
     }
 
@@ -121,6 +131,8 @@ const AdminController = {
       this.renderAssessmentsTable();
     } else if (tabName === "students") {
       this.renderStudentsTable();
+    } else if (tabName === "admins") {
+      this.renderAdminsTable();
     } else if (tabName === "settings") {
       this.renderSettings();
     }
@@ -129,9 +141,11 @@ const AdminController = {
   async refreshData() {
     this.cachedStudents = await DB.getStudents();
     this.cachedAssessments = await DB.getAssessments();
+    this.cachedAdmins = await DB.getAdmins();
     this.renderDashboard();
     this.renderAssessmentsTable();
     this.renderStudentsTable();
+    this.renderAdminsTable();
     this.renderSettings();
   },
 
@@ -422,6 +436,96 @@ const AdminController = {
       const newStatus = student.status === "active" ? "suspended" : "active";
       await DB.saveStudent({ ...student, status: newStatus });
       await this.refreshData();
+    }
+  },
+
+  // 3.5 เรนเดอร์ตารางจัดการผู้ดูแลระบบ (Admins Management)
+  renderAdminsTable() {
+    const tbody = document.getElementById("adminAdminsTableBody");
+    if (!tbody) return;
+
+    if (!this.cachedAdmins || this.cachedAdmins.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" class="text-center py-6 text-slate-400">ไม่พบรายชื่อผู้ดูแลระบบ</td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = this.cachedAdmins
+      .map((adm, idx) => {
+        const isPrimary = adm.email.toLowerCase() === "winai@psuwit.ac.th" || adm.role === "super_admin";
+        const roleBadge = isPrimary
+          ? `<span class="badge badge-warning font-bold">👑 ผู้ดูแลหลัก (Super Admin)</span>`
+          : `<span class="badge badge-primary">🛡️ ผู้ดูแลระบบ (Admin)</span>`;
+
+        const formattedDate = adm.created_at
+          ? new Date(adm.created_at).toLocaleDateString("th-TH", { dateStyle: "medium" })
+          : "-";
+
+        const actionHtml = isPrimary
+          ? `<span class="text-xs text-slate-400 font-semibold">สิทธิ์ถาวร (ห้ามลบ)</span>`
+          : `<button class="btn btn-sm btn-secondary text-red-500" onclick="AdminController.handleDeleteAdmin('${adm.email}')">🗑️ ลบผู้ดูแล</button>`;
+
+        return `
+          <tr>
+            <td class="text-center">${idx + 1}</td>
+            <td><strong>${adm.name || "-"}</strong></td>
+            <td class="text-xs font-semibold text-indigo-700">${adm.email}</td>
+            <td class="text-center">${roleBadge}</td>
+            <td class="text-center text-xs text-slate-500">${formattedDate}</td>
+            <td class="text-center">${actionHtml}</td>
+          </tr>
+        `;
+      })
+      .join("");
+  },
+
+  async handleAddAdmin() {
+    const emailInput = document.getElementById("newAdminEmail").value.trim().toLowerCase();
+    const nameInput = document.getElementById("newAdminName").value.trim();
+
+    const orgRegex = APP_CONFIG.orgEmailRegex || /^[a-zA-Z0-9._%+-]+@psuwit\.ac\.th$/i;
+    if (!orgRegex.test(emailInput)) {
+      alert("⚠️ กรุณากรอกอีเมลองค์กรที่ลงท้ายด้วย @psuwit.ac.th เท่านั้น");
+      return;
+    }
+
+    if (!nameInput) {
+      alert("กรุณากรอกชื่อ - นามสกุลของผู้ดูแลระบบ");
+      return;
+    }
+
+    await DB.saveAdmin({
+      email: emailInput,
+      name: nameInput,
+      role: emailInput === "winai@psuwit.ac.th" ? "super_admin" : "admin"
+    });
+
+    document.getElementById("newAdminEmail").value = "";
+    document.getElementById("newAdminName").value = "";
+    await this.refreshData();
+    alert(`✅ เพิ่มสิทธิ์ผู้ดูแลระบบให้กับ ${emailInput} เรียบร้อยแล้ว`);
+  },
+
+  async handleDeleteAdmin(email) {
+    const cleanEmail = (email || "").trim().toLowerCase();
+    if (cleanEmail === "winai@psuwit.ac.th") {
+      alert("⚠️ ไม่สามารถลบผู้ดูแลระบบหลัก (winai@psuwit.ac.th) ได้");
+      return;
+    }
+
+    if (!confirm(`คุณต้องการยกเลิกสิทธิ์ผู้ดูแลระบบของ ${cleanEmail} ใช่หรือไม่?`)) {
+      return;
+    }
+
+    try {
+      await DB.deleteAdmin(cleanEmail);
+      await this.refreshData();
+      alert(`🗑️ ลบสิทธิ์ผู้ดูแลระบบของ ${cleanEmail} เรียบร้อยแล้ว`);
+    } catch (err) {
+      alert("❌ " + err.message);
     }
   },
 
