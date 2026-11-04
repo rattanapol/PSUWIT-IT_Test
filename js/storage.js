@@ -1,119 +1,64 @@
 /**
  * ระบบจัดการฐานข้อมูล (Multi-Tier Database Engine)
  * 1. Primary: SQLite 3 Relational Database ผ่าน Backend REST API (/api/*)
- * 2. Browser DB: IndexedDB (PSUWIT_IT_Database) ตาราง students และ assessments พร้อม Index
+ * 2. Browser DB: IndexedDB (PSUWIT_IT_Database) ตาราง students, assessments, admins พร้อม Index
  * 3. Fallback Cache: LocalStorage สำหรับการเข้าถึงแบบ Offline / Static Hosting (เช่น GitHub Pages)
- * 4. Optional Cloud Sync: รองรับการส่งข้อมูลต่อไปยัง External Webhook / Google Apps Script
+ * 4. รองรับฐานข้อมูลผู้ใช้งานจากไฟล์ user.xlsx (นักเรียน 1,465 คน + ผู้ดูแลระบบ 3 คน = 1,468 คน)
  */
 
-const INITIAL_SEED_STUDENTS = [
-  { student_id: "1001", name: "เด็กชายกิตติศักดิ์ มณีโชติ", email: "1001@psuwit.ac.th", grade: "ม.1", status: "active", pretest_completed: true, posttest_completed: false, created_at: "2026-05-10T08:30:00Z" },
-  { student_id: "1002", name: "เด็กหญิงกมลวรรณ ชัยเจริญ", email: "1002@psuwit.ac.th", grade: "ม.1", status: "active", pretest_completed: true, posttest_completed: true, created_at: "2026-05-10T09:00:00Z" },
-  { student_id: "2001", name: "เด็กชายนภดล รัตนโกสินทร์", email: "2001@psuwit.ac.th", grade: "ม.2", status: "active", pretest_completed: true, posttest_completed: false, created_at: "2026-05-11T10:15:00Z" },
-  { student_id: "3001", name: "เด็กหญิงชญานิษฐ์ วรรณกรรม", email: "3001@psuwit.ac.th", grade: "ม.3", status: "active", pretest_completed: true, posttest_completed: true, created_at: "2026-05-12T11:20:00Z" },
-  { student_id: "4001", name: "นายธนภัทร สุขสมบูรณ์", email: "4001@psuwit.ac.th", grade: "ม.4", status: "active", pretest_completed: true, posttest_completed: true, created_at: "2026-05-13T13:45:00Z" },
-  { student_id: "5001", name: "นางสาวศศิธร เปล่งศรี", email: "5001@psuwit.ac.th", grade: "ม.5", status: "active", pretest_completed: true, posttest_completed: false, created_at: "2026-05-14T14:10:00Z" },
-  { student_id: "6001", name: "นายวริทธิ์ อัครเดชาภิรมย์", email: "6001@psuwit.ac.th", grade: "ม.6", status: "active", pretest_completed: true, posttest_completed: true, created_at: "2026-05-15T15:00:00Z" }
-];
+const INITIAL_SEED_STUDENTS = (typeof window !== "undefined" && Array.isArray(window.INITIAL_USERS_STUDENTS))
+  ? window.INITIAL_USERS_STUDENTS
+  : [];
 
-const INITIAL_SEED_ASSESSMENTS = [
-  {
-    test_id: "T-1715320000001",
-    student_id: "1001",
-    student_name: "เด็กชายกิตติศักดิ์ มณีโชติ",
-    email: "1001@psuwit.ac.th",
-    grade: "ม.1",
-    test_type: "Pre-test",
-    score_total: 45,
-    max_score: 75,
-    score_percent: 60,
-    domain_scores: { D1: 60, D2: 80, D3: 40, D4: 60, D5: 80, D6: 40 },
-    time_spent_seconds: 520,
-    violations_count: 0,
-    passed: true,
-    submitted_at: "2026-05-10T09:15:00Z"
-  },
-  {
-    test_id: "T-1715320000002",
-    student_id: "1002",
-    student_name: "เด็กหญิงกมลวรรณ ชัยเจริญ",
-    email: "1002@psuwit.ac.th",
-    grade: "ม.1",
-    test_type: "Pre-test",
-    score_total: 48,
-    max_score: 75,
-    score_percent: 64,
-    domain_scores: { D1: 60, D2: 80, D3: 60, D4: 60, D5: 60, D6: 60 },
-    time_spent_seconds: 480,
-    violations_count: 0,
-    passed: true,
-    submitted_at: "2026-05-10T09:30:00Z"
-  },
-  {
-    test_id: "T-1715320000003",
-    student_id: "1002",
-    student_name: "เด็กหญิงกมลวรรณ ชัยเจริญ",
-    email: "1002@psuwit.ac.th",
-    grade: "ม.1",
-    test_type: "Post-test",
-    score_total: 68,
-    max_score: 75,
-    score_percent: 91,
-    domain_scores: { D1: 100, D2: 80, D3: 100, D4: 80, D5: 100, D6: 80 },
-    time_spent_seconds: 410,
-    violations_count: 0,
-    passed: true,
-    submitted_at: "2026-05-10T11:45:00Z"
-  },
-  {
-    test_id: "T-1715320000004",
-    student_id: "4001",
-    student_name: "นายธนภัทร สุขสมบูรณ์",
-    email: "4001@psuwit.ac.th",
-    grade: "ม.4",
-    test_type: "Pre-test",
-    score_total: 50,
-    max_score: 75,
-    score_percent: 67,
-    domain_scores: { D1: 80, D2: 60, D3: 60, D4: 80, D5: 60, D6: 60 },
-    time_spent_seconds: 640,
-    violations_count: 1,
-    passed: true,
-    submitted_at: "2026-05-13T14:10:00Z"
-  },
-  {
-    test_id: "T-1715320000005",
-    student_id: "4001",
-    student_name: "นายธนภัทร สุขสมบูรณ์",
-    email: "4001@psuwit.ac.th",
-    grade: "ม.4",
-    test_type: "Post-test",
-    score_total: 70,
-    max_score: 75,
-    score_percent: 93,
-    domain_scores: { D1: 100, D2: 100, D3: 80, D4: 100, D5: 100, D6: 80 },
-    time_spent_seconds: 510,
-    violations_count: 0,
-    passed: true,
-    submitted_at: "2026-05-13T16:00:00Z"
-  }
-];
+const INITIAL_SEED_ASSESSMENTS = [];
 
-const INITIAL_SEED_ADMINS = [
-  {
-    email: "winai@psuwit.ac.th",
-    name: "อาจารย์วินัย (ผู้ดูแลระบบหลัก)",
-    role: "super_admin",
-    created_at: "2026-05-01T08:00:00Z"
-  }
-];
+const INITIAL_SEED_ADMINS = (typeof window !== "undefined" && Array.isArray(window.INITIAL_USERS_ADMINS))
+  ? window.INITIAL_USERS_ADMINS
+  : [
+      {
+        student_id: "50015",
+        title: "นาย",
+        first_name: "วินัย",
+        last_name: "รัตนพล",
+        name: "นายวินัย รัตนพล",
+        email: "winai@psuwit.ac.th",
+        username: "winai@psuwit.ac.th",
+        password: "123456",
+        role: "super_admin",
+        created_at: "2026-05-01T08:00:00Z"
+      },
+      {
+        student_id: "53001",
+        title: "นางสาว",
+        first_name: "กนก",
+        last_name: "กล่่อมขจิต",
+        name: "นางสาวกนก กล่่อมขจิต",
+        email: "knok@psuwit.ac.th",
+        username: "knok@psuwit.ac.th",
+        password: "123456",
+        role: "admin",
+        created_at: "2026-05-01T08:00:00Z"
+      },
+      {
+        student_id: "1",
+        title: "นาย",
+        first_name: "ดูแลระบบ",
+        last_name: "เทพสุดสุด",
+        name: "นายดูแลระบบ เทพสุดสุด",
+        email: "00001@psuwit.ac.th",
+        username: "00001@psuwit.ac.th",
+        password: "123456",
+        role: "super_admin",
+        created_at: "2026-05-01T08:00:00Z"
+      }
+    ];
 
 // ============================================================================
 // IndexedDB Browser Relational Store
 // ============================================================================
 const IDBEngine = {
   dbName: "PSUWIT_IT_Database",
-  dbVersion: 2,
+  dbVersion: 3,
   _dbPromise: null,
 
   open() {
@@ -262,6 +207,240 @@ const DB = {
     } catch (e) {}
   },
 
+  // Normalize username: รองรับทั้ง 6166@psuwit.ac.th และ 6166 หรือ winai
+  normalizeUsernameCandidates(rawInput) {
+    const clean = String(rawInput || "").trim().toLowerCase();
+    if (!clean) return [];
+    const candidates = [clean];
+    if (!clean.includes("@")) {
+      candidates.push(`${clean}@psuwit.ac.th`);
+    }
+    return candidates;
+  },
+
+  // ตรวจสอบการเข้าสู่ระบบด้วย Username และ Password
+  async authenticateUser(rawUsername, rawPassword, loginRole = "any") {
+    const candidates = this.normalizeUsernameCandidates(rawUsername);
+    const pwd = String(rawPassword ?? "");
+
+    if (candidates.length === 0 || !pwd) {
+      return { success: false, message: "กรุณากรอก Username และ Password ให้ครบถ้วน" };
+    }
+
+    // 1. ลองตรวจสอบผ่าน Backend SQLite API ก่อน
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: rawUsername, password: pwd, loginRole })
+      });
+      const json = await res.json();
+      if (res.ok && json.status === "success" && json.data) {
+        this.serverAvailable = true;
+        return { success: true, user: json.data };
+      } else if (json && json.message) {
+        return { success: false, message: json.message };
+      }
+    } catch (e) {
+      this.serverAvailable = false;
+    }
+
+    // 2. Fallback ตรวจสอบจากฐานข้อมูลในเบราว์เซอร์ (IndexedDB / LocalStorage)
+    const admins = await this.getAdmins();
+    const students = await this.getStudents();
+
+    const adminMatch = admins.find((a) => {
+      const u = (a.username || a.email || "").toLowerCase();
+      const sid = String(a.student_id || "").toLowerCase();
+      return candidates.includes(u) || (sid && candidates.includes(sid));
+    });
+
+    const studentMatch = students.find((s) => {
+      const u = (s.username || s.email || "").toLowerCase();
+      const sid = String(s.student_id || "").toLowerCase();
+      return candidates.includes(u) || (sid && candidates.includes(sid));
+    });
+
+    if (loginRole === "admin") {
+      if (!adminMatch) {
+        if (studentMatch) {
+          return {
+            success: false,
+            message: "🚫 บัญชีนี้เป็นบัญชีนักเรียน ไม่มีสิทธิ์เข้าใช้งานส่วนผู้ดูแลระบบ (Admin)"
+          };
+        }
+        return { success: false, message: "❌ ไม่พบบัญชีผู้ดูแลระบบนี้ในฐานข้อมูล" };
+      }
+      if (String(adminMatch.password || "123456") !== pwd) {
+        return { success: false, message: "❌ รหัสผ่าน (Password) ไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง" };
+      }
+      return {
+        success: true,
+        user: {
+          student_id: adminMatch.student_id || "",
+          title: adminMatch.title || "",
+          first_name: adminMatch.first_name || "",
+          last_name: adminMatch.last_name || "",
+          name: adminMatch.name,
+          email: adminMatch.email,
+          username: adminMatch.username || adminMatch.email,
+          grade: "-",
+          room: "-",
+          role: "admin",
+          adminRole: adminMatch.role || "admin",
+          status: "active"
+        }
+      };
+    }
+
+    if (studentMatch) {
+      if (studentMatch.status === "suspended") {
+        return {
+          success: false,
+          message: "🚫 บัญชีของคุณถูกระงับการใช้งานชั่วคราว กรุณาติดต่อผู้ดูแลระบบ"
+        };
+      }
+      if (String(studentMatch.password || "123456") !== pwd) {
+        return { success: false, message: "❌ รหัสผ่าน (Password) ไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง" };
+      }
+      return {
+        success: true,
+        user: {
+          student_id: studentMatch.student_id,
+          class_no: studentMatch.class_no || "",
+          title: studentMatch.title || "",
+          first_name: studentMatch.first_name || "",
+          last_name: studentMatch.last_name || "",
+          name: studentMatch.name,
+          email: studentMatch.email,
+          username: studentMatch.username || studentMatch.email,
+          grade: studentMatch.grade,
+          room: studentMatch.room || "",
+          role: "student",
+          status: studentMatch.status || "active",
+          pretest_completed: Boolean(studentMatch.pretest_completed),
+          posttest_completed: Boolean(studentMatch.posttest_completed)
+        }
+      };
+    }
+
+    if (adminMatch) {
+      if (String(adminMatch.password || "123456") !== pwd) {
+        return { success: false, message: "❌ รหัสผ่าน (Password) ไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง" };
+      }
+      return {
+        success: true,
+        user: {
+          student_id: adminMatch.student_id || "",
+          title: adminMatch.title || "",
+          first_name: adminMatch.first_name || "",
+          last_name: adminMatch.last_name || "",
+          name: adminMatch.name,
+          email: adminMatch.email,
+          username: adminMatch.username || adminMatch.email,
+          grade: "-",
+          room: "-",
+          role: "admin",
+          adminRole: adminMatch.role || "admin",
+          status: "active"
+        }
+      };
+    }
+
+    return {
+      success: false,
+      message: "❌ ไม่พบชื่อผู้ใช้งาน (Username) นี้ในระบบ กรุณาตรวจสอบอีกครั้ง"
+    };
+  },
+
+  // เปลี่ยนรหัสผ่านด้วยตนเอง (หรือรีเซ็ตโดย Admin)
+  async changePassword(rawUsername, currentPassword, newPassword, isAdminReset = false) {
+    const candidates = this.normalizeUsernameCandidates(rawUsername);
+    const curPwd = String(currentPassword ?? "");
+    const nextPwd = String(newPassword ?? "").trim();
+
+    if (candidates.length === 0) {
+      return { success: false, message: "กรุณาระบุชื่อผู้ใช้งาน (Username)" };
+    }
+    if (!nextPwd || nextPwd.length < 4) {
+      return { success: false, message: "รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 4 ตัวอักษร" };
+    }
+
+    let apiHandled = false;
+    let apiSuccess = false;
+    let apiMessage = "";
+
+    // 1. ส่งคำขอเปลี่ยนรหัสผ่านไปยัง SQLite Backend API
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: rawUsername,
+          currentPassword: curPwd,
+          newPassword: nextPwd,
+          isAdminReset: Boolean(isAdminReset)
+        })
+      });
+      const json = await res.json();
+      apiHandled = true;
+      apiSuccess = res.ok && json.status === "success";
+      apiMessage = json.message || "";
+      if (!apiSuccess) {
+        return { success: false, message: apiMessage || "ไม่สามารถเปลี่ยนรหัสผ่านได้" };
+      }
+    } catch (e) {
+      this.serverAvailable = false;
+    }
+
+    // 2. อัปเดตใน IndexedDB และ LocalStorage ให้ตรงกันเสมอ
+    let updatedLocal = false;
+    const students = await this.getStudents();
+    const sIdx = students.findIndex((s) => {
+      const u = (s.username || s.email || "").toLowerCase();
+      const sid = String(s.student_id || "").toLowerCase();
+      return candidates.includes(u) || (sid && candidates.includes(sid));
+    });
+
+    if (sIdx >= 0) {
+      if (!apiHandled && !isAdminReset && String(students[sIdx].password || "123456") !== curPwd) {
+        return { success: false, message: "❌ รหัสผ่านปัจจุบันไม่ถูกต้อง" };
+      }
+      students[sIdx].password = nextPwd;
+      students[sIdx].updated_at = new Date().toISOString();
+      localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(students));
+      await IDBEngine.put("students", students[sIdx]);
+      updatedLocal = true;
+    }
+
+    const admins = await this.getAdmins();
+    const aIdx = admins.findIndex((a) => {
+      const u = (a.username || a.email || "").toLowerCase();
+      const sid = String(a.student_id || "").toLowerCase();
+      return candidates.includes(u) || (sid && candidates.includes(sid));
+    });
+
+    if (aIdx >= 0) {
+      if (!apiHandled && !updatedLocal && !isAdminReset && String(admins[aIdx].password || "123456") !== curPwd) {
+        return { success: false, message: "❌ รหัสผ่านปัจจุบันไม่ถูกต้อง" };
+      }
+      admins[aIdx].password = nextPwd;
+      admins[aIdx].updated_at = new Date().toISOString();
+      localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(admins));
+      await IDBEngine.put("admins", admins[aIdx]);
+      updatedLocal = true;
+    }
+
+    if (!apiHandled && !updatedLocal) {
+      return { success: false, message: "❌ ไม่พบบัญชีผู้ใช้งานนี้ในระบบ" };
+    }
+
+    return {
+      success: true,
+      message: apiMessage || "✅ เปลี่ยนรหัสผ่านสำเร็จเรียบร้อยแล้ว!"
+    };
+  },
+
   // ตรวจสอบสถานะฐานข้อมูลทั้งหมด (SQLite Backend + IndexedDB)
   async getDatabaseStatus() {
     try {
@@ -284,14 +463,13 @@ const DB = {
       this.serverAvailable = false;
     }
 
-    // Fallback: IndexedDB + LocalStorage
     const students = await this.getStudents();
     const assessments = await this.getAssessments("all");
     return {
       connected: true,
       mode: "browser_indexeddb",
       engine: "IndexedDB (PSUWIT_IT_Database) + LocalStorage",
-      file: "Browser IndexedDB Storage",
+      file: "Browser IndexedDB Storage (user.xlsx)",
       fileSize: new Blob([JSON.stringify({ students, assessments })]).size,
       tables: {
         students: students.length,
@@ -300,7 +478,6 @@ const DB = {
     };
   },
 
-  // ทดสอบการเชื่อมต่อ External Webhook / Google Apps Script
   async testConnection(url) {
     const targetUrl = url || this.getGasUrl();
     if (!targetUrl) return { success: false, message: "ยังไม่ได้ระบุ External Webhook / Web App URL" };
@@ -320,68 +497,60 @@ const DB = {
     }
   },
 
-  // เตรียมข้อมูลเริ่มต้นสำหรับ IndexedDB และ LocalStorage
+  // เตรียมข้อมูลเริ่มต้นจากไฟล์ user.xlsx สำหรับ IndexedDB และ LocalStorage
   async initMockData() {
     let rawStudents = localStorage.getItem(APP_CONFIG.storageKeys.students);
-    // ตรวจสอบว่ามีข้อมูลรูปแบบเก่า (เช่น s641001@psuwit.ac.th) ค้างอยู่หรือไม่ หากมีให้อัปเดตเป็นรูปแบบรหัส 4 หลัก
-    if (!rawStudents || rawStudents.includes("s641001@psuwit.ac.th")) {
+    let parsedStudents = [];
+    try {
+      parsedStudents = rawStudents ? JSON.parse(rawStudents) : [];
+    } catch (e) {
+      parsedStudents = [];
+    }
+
+    // หากยังไม่มีข้อมูล หรือเป็นข้อมูลตัวอย่างเดิมที่มีน้อยกว่า 100 คน ให้โหลดฐานข้อมูลจริงจาก user.xlsx (1,465 คน)
+    if (!Array.isArray(parsedStudents) || parsedStudents.length < 100) {
       localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(INITIAL_SEED_STUDENTS));
       localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify(INITIAL_SEED_ASSESSMENTS));
       await IDBEngine.clear("students");
       await IDBEngine.clear("assessments");
-      rawStudents = JSON.stringify(INITIAL_SEED_STUDENTS);
+      await IDBEngine.putBulk("students", INITIAL_SEED_STUDENTS);
+    } else {
+      const idbStudents = await IDBEngine.getAll("students");
+      if (idbStudents.length < 100) {
+        await IDBEngine.putBulk("students", parsedStudents);
+      }
     }
 
     let rawAssessments = localStorage.getItem(APP_CONFIG.storageKeys.assessments);
-    if (!rawAssessments || (rawAssessments.includes("T-10001") && rawAssessments.includes('"max_score":30'))) {
-      localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify(INITIAL_SEED_ASSESSMENTS));
+    if (!rawAssessments || rawAssessments.includes("T-1715320000001")) {
+      localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify([]));
       await IDBEngine.clear("assessments");
-      rawAssessments = JSON.stringify(INITIAL_SEED_ASSESSMENTS);
-    } else {
-      // อัปเกรดข้อมูลคะแนนรายด้านเดิมที่เป็น 1-5 ให้เป็นเปอร์เซ็นต์ 0-100% สำหรับกราฟเรดาร์
-      try {
-        const parsed = JSON.parse(rawAssessments);
-        let updated = false;
-        parsed.forEach((a) => {
-          if (a.domain_scores && a.domain_scores.D1 <= 5 && a.domain_scores.D2 <= 5) {
-            Object.keys(a.domain_scores).forEach((k) => {
-              a.domain_scores[k] = Math.round((a.domain_scores[k] / 5) * 100);
-            });
-            updated = true;
-          }
-        });
-        if (updated) {
-          localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify(parsed));
-        }
-      } catch (e) {}
     }
 
-    // ซิงก์เข้า IndexedDB
-    const idbStudents = await IDBEngine.getAll("students");
-    if (idbStudents.length === 0) {
-      await IDBEngine.putBulk("students", JSON.parse(localStorage.getItem(APP_CONFIG.storageKeys.students) || "[]"));
-    }
-    const idbAssessments = await IDBEngine.getAll("assessments");
-    if (idbAssessments.length === 0) {
-      await IDBEngine.putBulk("assessments", JSON.parse(localStorage.getItem(APP_CONFIG.storageKeys.assessments) || "[]"));
-    }
-
-    // เตรียมข้อมูลผู้ดูแลระบบเริ่มต้น (winai@psuwit.ac.th)
+    // เตรียมข้อมูลผู้ดูแลระบบเริ่มต้นจาก user.xlsx (winai@psuwit.ac.th, knok@psuwit.ac.th, 00001@psuwit.ac.th)
     let rawAdmins = localStorage.getItem(APP_CONFIG.storageKeys.admins);
-    if (!rawAdmins) {
-      localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(INITIAL_SEED_ADMINS));
-    } else {
-      try {
-        const list = JSON.parse(rawAdmins);
-        if (!list.some((a) => a.email.toLowerCase() === "winai@psuwit.ac.th")) {
-          list.unshift(INITIAL_SEED_ADMINS[0]);
-          localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(list));
-        }
-      } catch (e) {}
+    let parsedAdmins = [];
+    try {
+      parsedAdmins = rawAdmins ? JSON.parse(rawAdmins) : [];
+    } catch (e) {
+      parsedAdmins = [];
     }
-    const idbAdmins = await IDBEngine.getAll("admins");
-    if (idbAdmins.length === 0) {
-      await IDBEngine.putBulk("admins", JSON.parse(localStorage.getItem(APP_CONFIG.storageKeys.admins) || "[]"));
+
+    let adminsChanged = false;
+    for (const seedAdmin of INITIAL_SEED_ADMINS) {
+      const idx = parsedAdmins.findIndex((a) => (a.email || "").toLowerCase() === seedAdmin.email.toLowerCase());
+      if (idx < 0) {
+        parsedAdmins.push({ ...seedAdmin });
+        adminsChanged = true;
+      } else if (!parsedAdmins[idx].password) {
+        parsedAdmins[idx] = { ...seedAdmin, ...parsedAdmins[idx], password: parsedAdmins[idx].password || seedAdmin.password || "123456" };
+        adminsChanged = true;
+      }
+    }
+
+    if (!rawAdmins || adminsChanged) {
+      localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(parsedAdmins));
+      await IDBEngine.putBulk("admins", parsedAdmins);
     }
   },
 
@@ -404,27 +573,41 @@ const DB = {
       const raw = localStorage.getItem(APP_CONFIG.storageKeys.admins);
       list = raw ? JSON.parse(raw) : [...INITIAL_SEED_ADMINS];
     }
-    if (!list.some((a) => a.email.toLowerCase() === "winai@psuwit.ac.th")) {
-      list.unshift(INITIAL_SEED_ADMINS[0]);
+    for (const seedAdmin of INITIAL_SEED_ADMINS) {
+      if (!list.some((a) => (a.email || "").toLowerCase() === seedAdmin.email.toLowerCase())) {
+        list.push({ ...seedAdmin });
+      }
     }
     return list;
   },
 
-  // ตรวจสอบว่าอีเมลนี้มีสิทธิ์ผู้ดูแลระบบหรือไม่
-  async findAdmin(email) {
-    const cleanEmail = (email || "").trim().toLowerCase();
-    if (!cleanEmail) return null;
+  // ตรวจสอบว่าอีเมล/ชื่อผู้ใช้นี้มีสิทธิ์ผู้ดูแลระบบหรือไม่
+  async findAdmin(emailOrUsername) {
+    const candidates = this.normalizeUsernameCandidates(emailOrUsername);
+    if (candidates.length === 0) return null;
     const admins = await this.getAdmins();
-    return admins.find((a) => a.email.toLowerCase() === cleanEmail) || null;
+    return (
+      admins.find((a) => {
+        const u = (a.username || a.email || "").toLowerCase();
+        const sid = String(a.student_id || "").toLowerCase();
+        return candidates.includes(u) || (sid && candidates.includes(sid));
+      }) || null
+    );
   },
 
   // เพิ่มผู้ดูแลระบบใหม่
   async saveAdmin(adminData) {
-    const cleanEmail = (adminData.email || "").trim().toLowerCase();
+    const cleanEmail = (adminData.email || adminData.username || "").trim().toLowerCase();
     const record = {
+      student_id: adminData.student_id || "",
+      title: adminData.title || "",
+      first_name: adminData.first_name || "",
+      last_name: adminData.last_name || "",
       email: cleanEmail,
+      username: cleanEmail,
+      password: adminData.password || "123456",
       name: (adminData.name || cleanEmail.split("@")[0] || "ผู้ดูแลระบบ").trim(),
-      role: cleanEmail === "winai@psuwit.ac.th" ? "super_admin" : (adminData.role || "admin"),
+      role: (cleanEmail === "winai@psuwit.ac.th" || cleanEmail === "00001@psuwit.ac.th") ? "super_admin" : (adminData.role || "admin"),
       created_at: adminData.created_at || new Date().toISOString()
     };
 
@@ -437,7 +620,7 @@ const DB = {
     } catch (e) {}
 
     const admins = await this.getAdmins();
-    const idx = admins.findIndex((a) => a.email.toLowerCase() === cleanEmail);
+    const idx = admins.findIndex((a) => (a.email || "").toLowerCase() === cleanEmail);
     if (idx >= 0) {
       admins[idx] = { ...admins[idx], ...record };
     } else {
@@ -460,14 +643,13 @@ const DB = {
     } catch (e) {}
 
     await IDBEngine.delete("admins", cleanEmail);
-    const admins = (await this.getAdmins()).filter((a) => a.email.toLowerCase() !== cleanEmail);
+    const admins = (await this.getAdmins()).filter((a) => (a.email || "").toLowerCase() !== cleanEmail);
     localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(admins));
     return true;
   },
 
   // ดึงรายชื่อนักเรียนทั้งหมด
   async getStudents() {
-    // 1. ลองดึงจาก SQLite Backend API
     try {
       const res = await fetch("/api/students");
       if (res.ok) {
@@ -483,7 +665,6 @@ const DB = {
       this.serverAvailable = false;
     }
 
-    // 2. ลองดึงจาก External Webhook ถ้าตั้งค่าไว้
     const gasUrl = this.getGasUrl();
     if (gasUrl) {
       try {
@@ -497,33 +678,48 @@ const DB = {
       } catch (err) {}
     }
 
-    // 3. ดึงจาก IndexedDB
     const idbList = await IDBEngine.getAll("students");
-    if (idbList && idbList.length > 0) {
+    if (idbList && idbList.length >= 100) {
       return idbList;
     }
 
-    // 4. ดึงจาก LocalStorage
     const raw = localStorage.getItem(APP_CONFIG.storageKeys.students);
-    return raw ? JSON.parse(raw) : [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    return parsed.length > 0 ? parsed : [...INITIAL_SEED_STUDENTS];
   },
 
   // บันทึก / แก้ไขข้อมูลนักเรียน
   async saveStudent(studentData) {
-    const cleanEmail = (studentData.email || "").trim().toLowerCase();
+    const cleanEmail = (studentData.email || studentData.username || "").trim().toLowerCase();
+    let students = [];
+    try {
+      const raw = localStorage.getItem(APP_CONFIG.storageKeys.students);
+      students = raw ? JSON.parse(raw) : [];
+    } catch (e) {}
+
+    const existingIndex = students.findIndex((s) => (s.email || "").toLowerCase() === cleanEmail);
+    const existing = existingIndex >= 0 ? students[existingIndex] : null;
+
     const record = {
-      student_id: studentData.student_id,
-      name: studentData.name,
+      student_id: studentData.student_id !== undefined ? studentData.student_id : (existing ? existing.student_id : ""),
+      class_no: studentData.class_no !== undefined ? studentData.class_no : (existing ? existing.class_no : ""),
+      title: studentData.title !== undefined ? studentData.title : (existing ? existing.title : ""),
+      first_name: studentData.first_name !== undefined ? studentData.first_name : (existing ? existing.first_name : ""),
+      last_name: studentData.last_name !== undefined ? studentData.last_name : (existing ? existing.last_name : ""),
+      name: studentData.name || (existing ? existing.name : ""),
       email: cleanEmail,
-      grade: studentData.grade,
-      status: studentData.status || "active",
-      pretest_completed: Boolean(studentData.pretest_completed),
-      posttest_completed: Boolean(studentData.posttest_completed),
-      created_at: studentData.created_at || new Date().toISOString(),
+      username: cleanEmail,
+      password: studentData.password || (existing && existing.password) || "123456",
+      grade: studentData.grade || (existing ? existing.grade : "ม.1"),
+      room: studentData.room !== undefined ? studentData.room : (existing ? existing.room : ""),
+      role: "student",
+      status: studentData.status || (existing ? existing.status : "active"),
+      pretest_completed: studentData.pretest_completed !== undefined ? Boolean(studentData.pretest_completed) : (existing ? Boolean(existing.pretest_completed) : false),
+      posttest_completed: studentData.posttest_completed !== undefined ? Boolean(studentData.posttest_completed) : (existing ? Boolean(existing.posttest_completed) : false),
+      created_at: (existing && existing.created_at) || studentData.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
 
-    // 1. บันทึกลง SQLite Backend API
     try {
       const res = await fetch("/api/students", {
         method: "POST",
@@ -535,24 +731,14 @@ const DB = {
       }
     } catch (e) {}
 
-    // 2. บันทึกลง IndexedDB และ LocalStorage
-    let students = [];
-    try {
-      const raw = localStorage.getItem(APP_CONFIG.storageKeys.students);
-      students = raw ? JSON.parse(raw) : [];
-    } catch (e) {}
-
-    const existingIndex = students.findIndex((s) => s.email.toLowerCase() === cleanEmail);
     if (existingIndex >= 0) {
-      students[existingIndex] = { ...students[existingIndex], ...studentData, email: cleanEmail, updated_at: record.updated_at };
-      await IDBEngine.put("students", students[existingIndex]);
+      students[existingIndex] = record;
     } else {
       students.push(record);
-      await IDBEngine.put("students", record);
     }
+    await IDBEngine.put("students", record);
     localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(students));
 
-    // 3. ส่งไปยัง External Webhook (ถ้ามี)
     const gasUrl = this.getGasUrl();
     if (gasUrl) {
       fetch(gasUrl, {
@@ -577,7 +763,7 @@ const DB = {
 
     const raw = localStorage.getItem(APP_CONFIG.storageKeys.students);
     let students = raw ? JSON.parse(raw) : [];
-    students = students.filter((s) => s.email.toLowerCase() !== cleanEmail);
+    students = students.filter((s) => (s.email || "").toLowerCase() !== cleanEmail);
     localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(students));
 
     const gasUrl = this.getGasUrl();
@@ -604,7 +790,7 @@ const DB = {
     } catch (e) {}
 
     const students = await this.getStudents();
-    const target = students.find((s) => s.email.toLowerCase() === cleanEmail);
+    const target = students.find((s) => (s.email || "").toLowerCase() === cleanEmail);
     if (target) {
       target.pretest_completed = false;
       target.posttest_completed = false;
@@ -627,7 +813,6 @@ const DB = {
   async getAssessments(gradeFilter = "all") {
     let assessments = [];
 
-    // 1. ลองดึงจาก SQLite Backend API
     try {
       const res = await fetch(`/api/assessments?grade=${encodeURIComponent(gradeFilter)}`);
       if (res.ok) {
@@ -646,7 +831,6 @@ const DB = {
       this.serverAvailable = false;
     }
 
-    // 2. ดึงจาก External Webhook (ถ้ามี)
     const gasUrl = this.getGasUrl();
     if (gasUrl) {
       try {
@@ -654,126 +838,115 @@ const DB = {
         const json = await res.json();
         if (json.status === "success" && Array.isArray(json.data)) {
           assessments = json.data;
-          localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify(assessments));
-          await IDBEngine.putBulk("assessments", assessments);
+          if (gradeFilter === "all") {
+            localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify(assessments));
+            await IDBEngine.putBulk("assessments", assessments);
+          }
+          return assessments;
         }
       } catch (err) {}
     }
 
-    // 3. ดึงจาก IndexedDB
-    if (assessments.length === 0) {
-      const idbList = await IDBEngine.getAll("assessments");
-      if (idbList && idbList.length > 0) {
-        assessments = idbList.sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at));
-      }
-    }
-
-    // 4. ดึงจาก LocalStorage
-    if (assessments.length === 0) {
+    assessments = await IDBEngine.getAll("assessments");
+    if (!assessments || assessments.length === 0) {
       const raw = localStorage.getItem(APP_CONFIG.storageKeys.assessments);
       assessments = raw ? JSON.parse(raw) : [];
     }
 
-    if (gradeFilter && gradeFilter !== "all") {
-      return assessments.filter((a) => a.grade === gradeFilter);
+    if (gradeFilter !== "all") {
+      assessments = assessments.filter((a) => a.grade === gradeFilter);
     }
-    return assessments;
+
+    return assessments.sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at));
   },
 
-  // ดึงประวัติการสอบของนักเรียนคนใดคนหนึ่ง
   async getStudentHistory(email) {
     const cleanEmail = (email || "").trim().toLowerCase();
     const all = await this.getAssessments("all");
-    return all.filter((a) => a.email && a.email.toLowerCase() === cleanEmail);
+    return all.filter((a) => (a.email || "").toLowerCase() === cleanEmail);
   },
 
-  // บันทึกผลการสอบใหม่ลงฐานข้อมูล
   async saveAssessment(resultData) {
-    const newRecord = {
-      test_id: "T-" + Date.now(),
-      student_id: resultData.student_id || "",
-      student_name: resultData.student_name || "",
-      email: (resultData.email || "").trim().toLowerCase(),
-      grade: resultData.grade,
-      test_type: resultData.test_type,
-      score_total: resultData.score_total,
-      max_score: resultData.max_score,
-      score_percent: resultData.score_percent,
-      domain_scores: resultData.domain_scores,
-      time_spent_seconds: resultData.time_spent_seconds,
-      violations_count: resultData.violations_count || 0,
-      passed: resultData.passed,
-      submitted_at: new Date().toISOString()
+    const cleanEmail = (resultData.email || "").trim().toLowerCase();
+    const record = {
+      ...resultData,
+      test_id: resultData.test_id || "T-" + Date.now(),
+      email: cleanEmail,
+      submitted_at: resultData.submitted_at || new Date().toISOString()
     };
 
-    // 1. บันทึกลง SQLite Backend API
     try {
       const res = await fetch("/api/assessments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newRecord)
+        body: JSON.stringify(record)
       });
       if (res.ok) {
         this.serverAvailable = true;
       }
     } catch (e) {}
 
-    // 2. บันทึกลง IndexedDB และ LocalStorage
-    await IDBEngine.put("assessments", newRecord);
-    const raw = localStorage.getItem(APP_CONFIG.storageKeys.assessments);
-    const assessments = raw ? JSON.parse(raw) : [];
-    assessments.unshift(newRecord);
+    let assessments = [];
+    try {
+      const raw = localStorage.getItem(APP_CONFIG.storageKeys.assessments);
+      assessments = raw ? JSON.parse(raw) : [];
+    } catch (e) {}
+
+    assessments.unshift(record);
     localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify(assessments));
+    await IDBEngine.put("assessments", record);
 
-    // อัปเดตสถานะในตารางนักเรียน
     const students = await this.getStudents();
-    const student = students.find((s) => s.email.toLowerCase() === newRecord.email);
-    if (student) {
-      if (resultData.test_type === "Pre-test") student.pretest_completed = true;
-      if (resultData.test_type === "Post-test") student.posttest_completed = true;
-      await IDBEngine.put("students", student);
-      localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(students));
-    }
+    const studentIndex = students.findIndex((s) => (s.email || "").toLowerCase() === cleanEmail);
 
-    // 3. ซิงก์ขึ้น External Webhook / Google Sheets (ถ้ามี)
+    if (studentIndex >= 0) {
+      if (record.test_type === "Pre-test") {
+        students[studentIndex].pretest_completed = true;
+      } else if (record.test_type === "Post-test") {
+        students[studentIndex].posttest_completed = true;
+      }
+      students[studentIndex].name = record.student_name || students[studentIndex].name;
+      students[studentIndex].grade = record.grade || students[studentIndex].grade;
+      await IDBEngine.put("students", students[studentIndex]);
+    } else {
+      const newStudent = {
+        student_id: record.student_id || cleanEmail.split("@")[0],
+        name: record.student_name,
+        email: cleanEmail,
+        username: cleanEmail,
+        password: "123456",
+        grade: record.grade,
+        status: "active",
+        pretest_completed: record.test_type === "Pre-test",
+        posttest_completed: record.test_type === "Post-test",
+        created_at: new Date().toISOString()
+      };
+      students.push(newStudent);
+      await IDBEngine.put("students", newStudent);
+    }
+    localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(students));
+
     const gasUrl = this.getGasUrl();
     if (gasUrl) {
-      const payload = {
-        action: "submit_assessment",
-        data: {
-          ...newRecord,
-          d1_score: newRecord.domain_scores?.D1 || 0,
-          d2_score: newRecord.domain_scores?.D2 || 0,
-          d3_score: newRecord.domain_scores?.D3 || 0,
-          d4_score: newRecord.domain_scores?.D4 || 0,
-          d5_score: newRecord.domain_scores?.D5 || 0,
-          d6_score: newRecord.domain_scores?.D6 || 0
-        }
-      };
       fetch(gasUrl, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ action: "save_assessment", data: record })
       }).catch(() => {});
     }
 
-    return newRecord;
+    return record;
   },
 
-  // ส่งออกฐานข้อมูลทั้งหมดเป็นไฟล์ JSON (.json)
   async exportDatabaseJSON() {
-    const status = await this.getDatabaseStatus();
     const students = await this.getStudents();
     const assessments = await this.getAssessments("all");
-
+    const admins = await this.getAdmins();
     const dump = {
-      database: "PSUWIT_IT_Competency_Database",
+      database: "PSUWIT_IT_Competency_DB",
+      version: "3.0",
       exported_at: new Date().toISOString(),
-      engine: status.engine,
-      tables: {
-        students,
-        assessments
-      }
+      tables: { students, assessments, admins }
     };
 
     const blob = new Blob([JSON.stringify(dump, null, 2)], { type: "application/json;charset=utf-8" });
@@ -786,10 +959,10 @@ const DB = {
     document.body.removeChild(a);
   },
 
-  // ส่งออกฐานข้อมูลเป็นไฟล์ SQL Dump (.sql)
   async exportDatabaseSQL() {
     const students = await this.getStudents();
     const assessments = await this.getAssessments("all");
+    const admins = await this.getAdmins();
     const esc = (val) => String(val ?? "").replace(/'/g, "''");
 
     let sql = `-- ============================================================================\n`;
@@ -800,9 +973,17 @@ const DB = {
     sql += `CREATE TABLE IF NOT EXISTS students (\n`;
     sql += `  id INTEGER PRIMARY KEY AUTOINCREMENT,\n`;
     sql += `  student_id VARCHAR(32) NOT NULL,\n`;
+    sql += `  class_no VARCHAR(20) DEFAULT '',\n`;
+    sql += `  title VARCHAR(50) DEFAULT '',\n`;
+    sql += `  first_name VARCHAR(100) DEFAULT '',\n`;
+    sql += `  last_name VARCHAR(100) DEFAULT '',\n`;
     sql += `  name VARCHAR(255) NOT NULL,\n`;
     sql += `  email VARCHAR(255) NOT NULL UNIQUE,\n`;
+    sql += `  username VARCHAR(255) NOT NULL UNIQUE,\n`;
+    sql += `  password VARCHAR(255) NOT NULL DEFAULT '123456',\n`;
     sql += `  grade VARCHAR(20) NOT NULL,\n`;
+    sql += `  room VARCHAR(20) DEFAULT '',\n`;
+    sql += `  role VARCHAR(30) NOT NULL DEFAULT 'student',\n`;
     sql += `  status VARCHAR(20) NOT NULL DEFAULT 'active',\n`;
     sql += `  pretest_completed INTEGER NOT NULL DEFAULT 0,\n`;
     sql += `  posttest_completed INTEGER NOT NULL DEFAULT 0,\n`;
@@ -811,7 +992,27 @@ const DB = {
     sql += `);\n\n`;
 
     students.forEach((s) => {
-      sql += `INSERT INTO students (student_id, name, email, grade, status, pretest_completed, posttest_completed, created_at) VALUES ('${esc(s.student_id)}', '${esc(s.name)}', '${esc(s.email)}', '${esc(s.grade)}', '${esc(s.status || "active")}', ${s.pretest_completed ? 1 : 0}, ${s.posttest_completed ? 1 : 0}, '${esc(s.created_at || new Date().toISOString())}');\n`;
+      const u = s.username || s.email;
+      sql += `INSERT INTO students (student_id, class_no, title, first_name, last_name, name, email, username, password, grade, room, role, status, pretest_completed, posttest_completed, created_at) VALUES ('${esc(s.student_id)}', '${esc(s.class_no)}', '${esc(s.title)}', '${esc(s.first_name)}', '${esc(s.last_name)}', '${esc(s.name)}', '${esc(s.email)}', '${esc(u)}', '${esc(s.password || "123456")}', '${esc(s.grade)}', '${esc(s.room)}', 'student', '${esc(s.status || "active")}', ${s.pretest_completed ? 1 : 0}, ${s.posttest_completed ? 1 : 0}, '${esc(s.created_at || new Date().toISOString())}');\n`;
+    });
+
+    sql += `\nCREATE TABLE IF NOT EXISTS admins (\n`;
+    sql += `  id INTEGER PRIMARY KEY AUTOINCREMENT,\n`;
+    sql += `  student_id VARCHAR(32) DEFAULT '',\n`;
+    sql += `  title VARCHAR(50) DEFAULT '',\n`;
+    sql += `  first_name VARCHAR(100) DEFAULT '',\n`;
+    sql += `  last_name VARCHAR(100) DEFAULT '',\n`;
+    sql += `  name VARCHAR(255) NOT NULL,\n`;
+    sql += `  email VARCHAR(255) NOT NULL UNIQUE,\n`;
+    sql += `  username VARCHAR(255) NOT NULL UNIQUE,\n`;
+    sql += `  password VARCHAR(255) NOT NULL DEFAULT '123456',\n`;
+    sql += `  role VARCHAR(50) NOT NULL DEFAULT 'admin',\n`;
+    sql += `  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP\n`;
+    sql += `);\n\n`;
+
+    admins.forEach((a) => {
+      const u = a.username || a.email;
+      sql += `INSERT INTO admins (student_id, title, first_name, last_name, name, email, username, password, role) VALUES ('${esc(a.student_id)}', '${esc(a.title)}', '${esc(a.first_name)}', '${esc(a.last_name)}', '${esc(a.name)}', '${esc(a.email)}', '${esc(u)}', '${esc(a.password || "123456")}', '${esc(a.role || "admin")}');\n`;
     });
 
     sql += `\nCREATE TABLE IF NOT EXISTS assessments (\n`;
@@ -849,7 +1050,6 @@ const DB = {
     document.body.removeChild(link);
   },
 
-  // นำเข้าข้อมูลฐานข้อมูลจากไฟล์ JSON
   async importDatabaseJSON(jsonData) {
     const students = jsonData?.tables?.students || jsonData?.students || [];
     const assessments = jsonData?.tables?.assessments || jsonData?.assessments || [];
@@ -873,7 +1073,6 @@ const DB = {
     return true;
   },
 
-  // รีเซ็ตฐานข้อมูลกลับเป็นค่าเริ่มต้น (Seed Data)
   async resetDatabaseToSeed() {
     try {
       await fetch("/api/database/seed", { method: "POST" });
@@ -881,15 +1080,16 @@ const DB = {
 
     await IDBEngine.clear("students");
     await IDBEngine.clear("assessments");
+    await IDBEngine.clear("admins");
     localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(INITIAL_SEED_STUDENTS));
     localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify(INITIAL_SEED_ASSESSMENTS));
+    localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(INITIAL_SEED_ADMINS));
     await IDBEngine.putBulk("students", INITIAL_SEED_STUDENTS);
-    await IDBEngine.putBulk("assessments", INITIAL_SEED_ASSESSMENTS);
+    await IDBEngine.putBulk("admins", INITIAL_SEED_ADMINS);
     return true;
   }
 };
 
-// เริ่มต้นฐานข้อมูลเมื่อโหลดสคริปต์
 DB.initMockData();
 DB.loadServerSettings();
 

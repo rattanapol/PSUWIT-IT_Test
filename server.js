@@ -2,12 +2,15 @@
  * Backend Server & Relational Database Engine (SQLite 3 + REST API)
  * ระบบทดสอบสมรรถนะเทคโนโลยีสารสนเทศ (IT Competency Assessment System)
  * โรงเรียน ม.อ. วิทยานุสรณ์ (PSU Wittayanusorn School)
+ * รองรับฐานข้อมูลผู้ใช้งานจากไฟล์ user.xlsx (นักเรียน 1,465 คน + ผู้ดูแลระบบ 3 คน)
+ * พร้อมระบบ Login ด้วย Username / Password และการเปลี่ยนรหัสผ่านด้วยตนเอง
  */
 
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
+const { INITIAL_USERS_STUDENTS, INITIAL_USERS_ADMINS } = require('./js/users_data.js');
 
 const PORT = process.env.PORT || 3000;
 const DB_DIR = path.join(__dirname, 'database');
@@ -19,111 +22,6 @@ if (!fs.existsSync(DB_DIR)) {
 }
 
 // ============================================================================
-// ข้อมูลตัวอย่างเริ่มต้น (Initial Seed Data)
-// ============================================================================
-const INITIAL_STUDENTS = [
-  { student_id: "1001", name: "เด็กชายกิตติศักดิ์ มณีโชติ", email: "1001@psuwit.ac.th", grade: "ม.1", status: "active", pretest_completed: 1, posttest_completed: 0, created_at: "2026-05-10T08:30:00Z" },
-  { student_id: "1002", name: "เด็กหญิงกมลวรรณ ชัยเจริญ", email: "1002@psuwit.ac.th", grade: "ม.1", status: "active", pretest_completed: 1, posttest_completed: 1, created_at: "2026-05-10T09:00:00Z" },
-  { student_id: "2001", name: "เด็กชายนภดล รัตนโกสินทร์", email: "2001@psuwit.ac.th", grade: "ม.2", status: "active", pretest_completed: 1, posttest_completed: 0, created_at: "2026-05-11T10:15:00Z" },
-  { student_id: "3001", name: "เด็กหญิงชญานิษฐ์ วรรณกรรม", email: "3001@psuwit.ac.th", grade: "ม.3", status: "active", pretest_completed: 1, posttest_completed: 1, created_at: "2026-05-12T11:20:00Z" },
-  { student_id: "4001", name: "นายธนภัทร สุขสมบูรณ์", email: "4001@psuwit.ac.th", grade: "ม.4", status: "active", pretest_completed: 1, posttest_completed: 1, created_at: "2026-05-13T13:45:00Z" },
-  { student_id: "5001", name: "นางสาวศศิธร เปล่งศรี", email: "5001@psuwit.ac.th", grade: "ม.5", status: "active", pretest_completed: 1, posttest_completed: 0, created_at: "2026-05-14T14:10:00Z" },
-  { student_id: "6001", name: "นายวริทธิ์ อัครเดชาภิรมย์", email: "6001@psuwit.ac.th", grade: "ม.6", status: "active", pretest_completed: 1, posttest_completed: 1, created_at: "2026-05-15T15:00:00Z" }
-];
-
-const INITIAL_ASSESSMENTS = [
-  {
-    test_id: "T-1715320000001",
-    student_id: "1001",
-    student_name: "เด็กชายกิตติศักดิ์ มณีโชติ",
-    email: "1001@psuwit.ac.th",
-    grade: "ม.1",
-    test_type: "Pre-test",
-    score_total: 45,
-    max_score: 75,
-    score_percent: 60,
-    domain_scores: { D1: 60, D2: 80, D3: 40, D4: 60, D5: 80, D6: 40 },
-    time_spent_seconds: 520,
-    violations_count: 0,
-    passed: 1,
-    submitted_at: "2026-05-10T09:15:00Z"
-  },
-  {
-    test_id: "T-1715320000002",
-    student_id: "1002",
-    student_name: "เด็กหญิงกมลวรรณ ชัยเจริญ",
-    email: "1002@psuwit.ac.th",
-    grade: "ม.1",
-    test_type: "Pre-test",
-    score_total: 48,
-    max_score: 75,
-    score_percent: 64,
-    domain_scores: { D1: 60, D2: 80, D3: 60, D4: 60, D5: 60, D6: 60 },
-    time_spent_seconds: 480,
-    violations_count: 0,
-    passed: 1,
-    submitted_at: "2026-05-10T09:30:00Z"
-  },
-  {
-    test_id: "T-1715320000003",
-    student_id: "1002",
-    student_name: "เด็กหญิงกมลวรรณ ชัยเจริญ",
-    email: "1002@psuwit.ac.th",
-    grade: "ม.1",
-    test_type: "Post-test",
-    score_total: 68,
-    max_score: 75,
-    score_percent: 91,
-    domain_scores: { D1: 100, D2: 80, D3: 100, D4: 80, D5: 100, D6: 80 },
-    time_spent_seconds: 410,
-    violations_count: 0,
-    passed: 1,
-    submitted_at: "2026-05-10T11:45:00Z"
-  },
-  {
-    test_id: "T-1715320000004",
-    student_id: "4001",
-    student_name: "นายธนภัทร สุขสมบูรณ์",
-    email: "4001@psuwit.ac.th",
-    grade: "ม.4",
-    test_type: "Pre-test",
-    score_total: 50,
-    max_score: 75,
-    score_percent: 67,
-    domain_scores: { D1: 80, D2: 60, D3: 60, D4: 80, D5: 60, D6: 60 },
-    time_spent_seconds: 640,
-    violations_count: 1,
-    passed: 1,
-    submitted_at: "2026-05-13T14:10:00Z"
-  },
-  {
-    test_id: "T-1715320000005",
-    student_id: "4001",
-    student_name: "นายธนภัทร สุขสมบูรณ์",
-    email: "4001@psuwit.ac.th",
-    grade: "ม.4",
-    test_type: "Post-test",
-    score_total: 70,
-    max_score: 75,
-    score_percent: 93,
-    domain_scores: { D1: 100, D2: 100, D3: 80, D4: 100, D5: 100, D6: 80 },
-    time_spent_seconds: 510,
-    violations_count: 0,
-    passed: 1,
-    submitted_at: "2026-05-13T16:00:00Z"
-  }
-];
-
-const INITIAL_ADMINS = [
-  {
-    email: "winai@psuwit.ac.th",
-    name: "อาจารย์วินัย (ผู้ดูแลระบบหลัก)",
-    role: "super_admin",
-    created_at: "2026-05-01T08:00:00Z"
-  }
-];
-
-// ============================================================================
 // ระบบจัดการฐานข้อมูล SQLite 3 (Built-in node:sqlite)
 // ============================================================================
 class DatabaseManager {
@@ -131,7 +29,8 @@ class DatabaseManager {
     const { DatabaseSync } = require('node:sqlite');
     this.db = new DatabaseSync(SQLITE_PATH);
     this.initSchema();
-    this.ensurePrimaryAdmin();
+    this.ensureColumns();
+    this.ensurePrimaryAdmins();
     this.seedIfEmpty();
   }
 
@@ -140,77 +39,316 @@ class DatabaseManager {
     this.db.exec(schemaSql);
   }
 
-  ensurePrimaryAdmin() {
+  ensureColumns() {
+    const alterStatements = [
+      "ALTER TABLE students ADD COLUMN class_no VARCHAR(20) DEFAULT ''",
+      "ALTER TABLE students ADD COLUMN title VARCHAR(50) DEFAULT ''",
+      "ALTER TABLE students ADD COLUMN first_name VARCHAR(100) DEFAULT ''",
+      "ALTER TABLE students ADD COLUMN last_name VARCHAR(100) DEFAULT ''",
+      "ALTER TABLE students ADD COLUMN username VARCHAR(255) DEFAULT ''",
+      "ALTER TABLE students ADD COLUMN password VARCHAR(255) DEFAULT '123456'",
+      "ALTER TABLE students ADD COLUMN room VARCHAR(20) DEFAULT ''",
+      "ALTER TABLE students ADD COLUMN role VARCHAR(30) DEFAULT 'student'",
+      "ALTER TABLE admins ADD COLUMN student_id VARCHAR(32) DEFAULT ''",
+      "ALTER TABLE admins ADD COLUMN title VARCHAR(50) DEFAULT ''",
+      "ALTER TABLE admins ADD COLUMN first_name VARCHAR(100) DEFAULT ''",
+      "ALTER TABLE admins ADD COLUMN last_name VARCHAR(100) DEFAULT ''",
+      "ALTER TABLE admins ADD COLUMN username VARCHAR(255) DEFAULT ''",
+      "ALTER TABLE admins ADD COLUMN password VARCHAR(255) DEFAULT '123456'",
+      "ALTER TABLE admins ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"
+    ];
+    for (const stmt of alterStatements) {
+      try {
+        this.db.exec(stmt);
+      } catch (e) {}
+    }
+  }
+
+  ensurePrimaryAdmins() {
     const insertAdmin = this.db.prepare(`
-      INSERT OR IGNORE INTO admins (email, name, role, created_at)
-      VALUES (?, ?, ?, ?)
+      INSERT OR IGNORE INTO admins (student_id, title, first_name, last_name, name, email, username, password, role, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `);
-    for (const a of INITIAL_ADMINS) {
-      insertAdmin.run(a.email.toLowerCase(), a.name, a.role, a.created_at);
+    for (const a of INITIAL_USERS_ADMINS) {
+      const uname = (a.username || a.email || '').toLowerCase();
+      insertAdmin.run(
+        a.student_id || '',
+        a.title || '',
+        a.first_name || '',
+        a.last_name || '',
+        a.name || uname,
+        uname,
+        uname,
+        a.password || '123456',
+        a.role || 'admin'
+      );
     }
   }
 
   seedIfEmpty() {
     const countRow = this.db.prepare('SELECT COUNT(*) AS cnt FROM students').get();
-    if (!countRow || countRow.cnt === 0) {
+    if (!countRow || countRow.cnt < 100) {
       this.seedDatabase();
     }
   }
 
   seedDatabase() {
-    const insertStudent = this.db.prepare(`
-      INSERT OR REPLACE INTO students (
-        student_id, name, email, grade, status, pretest_completed, posttest_completed, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    const now = new Date().toISOString();
+    this.db.exec('BEGIN TRANSACTION');
+    try {
+      const insertStudent = this.db.prepare(`
+        INSERT OR REPLACE INTO students (
+          student_id, class_no, title, first_name, last_name, name,
+          email, username, password, grade, room, role, status,
+          pretest_completed, posttest_completed, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
 
-    for (const s of INITIAL_STUDENTS) {
-      insertStudent.run(
-        s.student_id,
-        s.name,
-        s.email.toLowerCase(),
-        s.grade,
-        s.status,
-        s.pretest_completed ? 1 : 0,
-        s.posttest_completed ? 1 : 0,
-        s.created_at,
-        s.created_at
-      );
+      for (const s of INITIAL_USERS_STUDENTS) {
+        const uname = (s.username || s.email || '').toLowerCase();
+        insertStudent.run(
+          s.student_id || '',
+          s.class_no || '',
+          s.title || '',
+          s.first_name || '',
+          s.last_name || '',
+          s.name || '',
+          uname,
+          uname,
+          s.password || '123456',
+          s.grade || 'ม.1',
+          s.room || '',
+          'student',
+          s.status || 'active',
+          s.pretest_completed ? 1 : 0,
+          s.posttest_completed ? 1 : 0,
+          now,
+          now
+        );
+      }
+
+      const insertAdmin = this.db.prepare(`
+        INSERT OR REPLACE INTO admins (
+          student_id, title, first_name, last_name, name,
+          email, username, password, role, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const a of INITIAL_USERS_ADMINS) {
+        const uname = (a.username || a.email || '').toLowerCase();
+        insertAdmin.run(
+          a.student_id || '',
+          a.title || '',
+          a.first_name || '',
+          a.last_name || '',
+          a.name || '',
+          uname,
+          uname,
+          a.password || '123456',
+          a.role || 'admin',
+          now,
+          now
+        );
+      }
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+  }
+
+  // Normalize username: รองรับทั้งการพิมพ์เต็ม เช่น 6166@psuwit.ac.th หรือพิมพ์เฉพาะรหัส เช่น 6166 หรือ winai
+  normalizeUsernameCandidates(rawInput) {
+    const clean = String(rawInput || '').trim().toLowerCase();
+    if (!clean) return [];
+    const candidates = [clean];
+    if (!clean.includes('@')) {
+      candidates.push(`${clean}@psuwit.ac.th`);
+    }
+    return candidates;
+  }
+
+  // ตรวจสอบการเข้าสู่ระบบด้วย Username และ Password
+  authenticateUser(rawUsername, rawPassword, loginRole = 'any') {
+    const candidates = this.normalizeUsernameCandidates(rawUsername);
+    const pwd = String(rawPassword ?? '');
+
+    if (candidates.length === 0 || !pwd) {
+      return { success: false, message: 'กรุณากรอก Username และ Password ให้ครบถ้วน' };
     }
 
-    const insertAssessment = this.db.prepare(`
-      INSERT OR REPLACE INTO assessments (
-        test_id, student_id, student_name, email, grade, test_type,
-        score_total, max_score, score_percent,
-        d1_score, d2_score, d3_score, d4_score, d5_score, d6_score,
-        domain_scores_json, time_spent_seconds, violations_count, passed, submitted_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    for (const a of INITIAL_ASSESSMENTS) {
-      insertAssessment.run(
-        a.test_id,
-        a.student_id,
-        a.student_name,
-        a.email.toLowerCase(),
-        a.grade,
-        a.test_type,
-        a.score_total,
-        a.max_score,
-        a.score_percent,
-        a.domain_scores.D1 || 0,
-        a.domain_scores.D2 || 0,
-        a.domain_scores.D3 || 0,
-        a.domain_scores.D4 || 0,
-        a.domain_scores.D5 || 0,
-        a.domain_scores.D6 || 0,
-        JSON.stringify(a.domain_scores),
-        a.time_spent_seconds,
-        a.violations_count,
-        a.passed ? 1 : 0,
-        a.submitted_at
-      );
+    // 1. ค้นหาในตาราง admins
+    let adminMatch = null;
+    for (const cand of candidates) {
+      adminMatch = this.db.prepare(
+        'SELECT * FROM admins WHERE LOWER(username) = ? OR LOWER(email) = ? OR student_id = ?'
+      ).get(cand, cand, cand);
+      if (adminMatch) break;
     }
+
+    // 2. ค้นหาในตาราง students
+    let studentMatch = null;
+    for (const cand of candidates) {
+      studentMatch = this.db.prepare(
+        'SELECT * FROM students WHERE LOWER(username) = ? OR LOWER(email) = ? OR student_id = ?'
+      ).get(cand, cand, cand);
+      if (studentMatch) break;
+    }
+
+    if (loginRole === 'admin') {
+      if (!adminMatch) {
+        if (studentMatch) {
+          return {
+            success: false,
+            message: '🚫 บัญชีนี้เป็นบัญชีนักเรียน ไม่มีสิทธิ์เข้าใช้งานส่วนผู้ดูแลระบบ (Admin)'
+          };
+        }
+        return { success: false, message: '❌ ไม่พบบัญชีผู้ดูแลระบบนี้ในฐานข้อมูล' };
+      }
+
+      if (String(adminMatch.password) !== pwd) {
+        return { success: false, message: '❌ รหัสผ่าน (Password) ไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง' };
+      }
+
+      return {
+        success: true,
+        user: {
+          student_id: adminMatch.student_id || '',
+          title: adminMatch.title || '',
+          first_name: adminMatch.first_name || '',
+          last_name: adminMatch.last_name || '',
+          name: adminMatch.name,
+          email: adminMatch.email,
+          username: adminMatch.username || adminMatch.email,
+          grade: '-',
+          room: '-',
+          role: 'admin',
+          adminRole: adminMatch.role || 'admin',
+          status: 'active'
+        }
+      };
+    }
+
+    // กรณีล็อกอินฝั่งนักเรียน (หรือทั่วไป): หากเป็นนักเรียนให้ตรวจรหัสผ่านนักเรียนก่อน หากเป็นแอดมินก็สามารถล็อกอินเข้าได้เช่นกัน
+    if (studentMatch) {
+      if (studentMatch.status === 'suspended') {
+        return {
+          success: false,
+          message: '🚫 บัญชีของคุณถูกระงับการใช้งานชั่วคราว กรุณาติดต่อผู้ดูแลระบบ'
+        };
+      }
+      if (String(studentMatch.password) !== pwd) {
+        return { success: false, message: '❌ รหัสผ่าน (Password) ไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง' };
+      }
+
+      return {
+        success: true,
+        user: {
+          student_id: studentMatch.student_id,
+          class_no: studentMatch.class_no || '',
+          title: studentMatch.title || '',
+          first_name: studentMatch.first_name || '',
+          last_name: studentMatch.last_name || '',
+          name: studentMatch.name,
+          email: studentMatch.email,
+          username: studentMatch.username || studentMatch.email,
+          grade: studentMatch.grade,
+          room: studentMatch.room || '',
+          role: 'student',
+          status: studentMatch.status || 'active',
+          pretest_completed: Boolean(studentMatch.pretest_completed),
+          posttest_completed: Boolean(studentMatch.posttest_completed)
+        }
+      };
+    }
+
+    if (adminMatch) {
+      if (String(adminMatch.password) !== pwd) {
+        return { success: false, message: '❌ รหัสผ่าน (Password) ไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง' };
+      }
+      return {
+        success: true,
+        user: {
+          student_id: adminMatch.student_id || '',
+          title: adminMatch.title || '',
+          first_name: adminMatch.first_name || '',
+          last_name: adminMatch.last_name || '',
+          name: adminMatch.name,
+          email: adminMatch.email,
+          username: adminMatch.username || adminMatch.email,
+          grade: '-',
+          room: '-',
+          role: 'admin',
+          adminRole: adminMatch.role || 'admin',
+          status: 'active'
+        }
+      };
+    }
+
+    return {
+      success: false,
+      message: '❌ ไม่พบชื่อผู้ใช้งาน (Username) นี้ในระบบ กรุณาตรวจสอบอีกครั้ง'
+    };
+  }
+
+  // เปลี่ยนรหัสผ่านของผู้ใช้งาน (รองรับทั้งนักเรียนและผู้ดูแลระบบ รวมถึงการรีเซ็ตโดย Admin)
+  changePassword(rawUsername, currentPassword, newPassword, isAdminReset = false) {
+    const candidates = this.normalizeUsernameCandidates(rawUsername);
+    const curPwd = String(currentPassword ?? '');
+    const nextPwd = String(newPassword ?? '').trim();
+
+    if (candidates.length === 0) {
+      return { success: false, message: 'ไม่พบชื่อผู้ใช้งาน (Username)' };
+    }
+    if (!nextPwd || nextPwd.length < 4) {
+      return { success: false, message: 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 4 ตัวอักษร' };
+    }
+
+    const now = new Date().toISOString();
+    let updatedAny = false;
+
+    // ตรวจสอบในตาราง students
+    let studentMatch = null;
+    for (const cand of candidates) {
+      studentMatch = this.db.prepare(
+        'SELECT * FROM students WHERE LOWER(username) = ? OR LOWER(email) = ? OR student_id = ?'
+      ).get(cand, cand, cand);
+      if (studentMatch) break;
+    }
+
+    // ตรวจสอบในตาราง admins
+    let adminMatch = null;
+    for (const cand of candidates) {
+      adminMatch = this.db.prepare(
+        'SELECT * FROM admins WHERE LOWER(username) = ? OR LOWER(email) = ? OR student_id = ?'
+      ).get(cand, cand, cand);
+      if (adminMatch) break;
+    }
+
+    if (!studentMatch && !adminMatch) {
+      return { success: false, message: '❌ ไม่พบบัญชีผู้ใช้งานนี้ในระบบ' };
+    }
+
+    if (studentMatch) {
+      if (!isAdminReset && String(studentMatch.password) !== curPwd) {
+        return { success: false, message: '❌ รหัสผ่านปัจจุบันไม่ถูกต้อง' };
+      }
+      this.db.prepare('UPDATE students SET password = ?, updated_at = ? WHERE id = ?').run(nextPwd, now, studentMatch.id);
+      updatedAny = true;
+    }
+
+    if (adminMatch) {
+      if (!isAdminReset && !updatedAny && String(adminMatch.password) !== curPwd) {
+        return { success: false, message: '❌ รหัสผ่านปัจจุบันไม่ถูกต้อง' };
+      }
+      this.db.prepare('UPDATE admins SET password = ?, updated_at = ? WHERE id = ?').run(nextPwd, now, adminMatch.id);
+      updatedAny = true;
+    }
+
+    return {
+      success: true,
+      message: '✅ เปลี่ยนรหัสผ่านเรียบร้อยแล้ว กรุณาใช้รหัสผ่านใหม่ในการเข้าสู่ระบบครั้งถัดไป'
+    };
   }
 
   getStatus() {
@@ -237,20 +375,42 @@ class DatabaseManager {
   }
 
   getAdmins() {
-    this.ensurePrimaryAdmin();
+    this.ensurePrimaryAdmins();
     return this.db.prepare('SELECT * FROM admins ORDER BY id ASC').all();
   }
 
   saveAdmin(data) {
-    const email = (data.email || '').trim().toLowerCase();
+    const email = (data.email || data.username || '').trim().toLowerCase();
     const name = (data.name || email.split('@')[0] || 'ผู้ดูแลระบบ').trim();
-    const role = email === 'winai@psuwit.ac.th' ? 'super_admin' : (data.role || 'admin');
+    const role = (email === 'winai@psuwit.ac.th' || email === '00001@psuwit.ac.th') ? 'super_admin' : (data.role || 'admin');
+    const existing = this.db.prepare('SELECT * FROM admins WHERE LOWER(email) = ? OR LOWER(username) = ?').get(email, email);
+    const password = data.password || (existing && existing.password) || '123456';
     const now = new Date().toISOString();
 
-    this.db.prepare(`
-      INSERT OR REPLACE INTO admins (email, name, role, created_at)
-      VALUES (?, ?, ?, ?)
-    `).run(email, name, role, data.created_at || now);
+    if (existing) {
+      this.db.prepare(`
+        UPDATE admins
+        SET student_id = ?, name = ?, password = ?, role = ?, updated_at = ?
+        WHERE id = ?
+      `).run(data.student_id || existing.student_id || '', name, password, role, now, existing.id);
+    } else {
+      this.db.prepare(`
+        INSERT INTO admins (student_id, title, first_name, last_name, name, email, username, password, role, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        data.student_id || '',
+        data.title || '',
+        data.first_name || '',
+        data.last_name || '',
+        name,
+        email,
+        email,
+        password,
+        role,
+        now,
+        now
+      );
+    }
 
     return this.db.prepare('SELECT * FROM admins WHERE LOWER(email) = ?').get(email);
   }
@@ -260,7 +420,7 @@ class DatabaseManager {
     if (cleanEmail === 'winai@psuwit.ac.th') {
       throw new Error('ไม่สามารถลบผู้ดูแลระบบหลัก (winai@psuwit.ac.th) ได้');
     }
-    this.db.prepare('DELETE FROM admins WHERE LOWER(email) = ?').run(cleanEmail);
+    this.db.prepare('DELETE FROM admins WHERE LOWER(email) = ? OR LOWER(username) = ?').run(cleanEmail, cleanEmail);
     return true;
   }
 
@@ -269,9 +429,17 @@ class DatabaseManager {
     return rows.map(r => ({
       id: r.id,
       student_id: r.student_id,
+      class_no: r.class_no || '',
+      title: r.title || '',
+      first_name: r.first_name || '',
+      last_name: r.last_name || '',
       name: r.name,
       email: r.email,
+      username: r.username || r.email,
+      password: r.password || '123456',
       grade: r.grade,
+      room: r.room || '',
+      role: r.role || 'student',
       status: r.status,
       pretest_completed: Boolean(r.pretest_completed),
       posttest_completed: Boolean(r.posttest_completed),
@@ -281,32 +449,50 @@ class DatabaseManager {
   }
 
   saveStudent(data) {
-    const email = (data.email || '').trim().toLowerCase();
-    const existing = this.db.prepare('SELECT * FROM students WHERE LOWER(email) = ?').get(email);
+    const email = (data.email || data.username || '').trim().toLowerCase();
+    const existing = this.db.prepare('SELECT * FROM students WHERE LOWER(email) = ? OR LOWER(username) = ?').get(email, email);
     const now = new Date().toISOString();
 
     if (existing) {
       this.db.prepare(`
         UPDATE students
-        SET student_id = ?, name = ?, grade = ?, status = ?, updated_at = ?
-        WHERE LOWER(email) = ?
+        SET student_id = ?, class_no = ?, title = ?, first_name = ?, last_name = ?,
+            name = ?, password = ?, grade = ?, room = ?, status = ?, updated_at = ?
+        WHERE id = ?
       `).run(
-        data.student_id || existing.student_id,
+        data.student_id !== undefined ? data.student_id : existing.student_id,
+        data.class_no !== undefined ? data.class_no : (existing.class_no || ''),
+        data.title !== undefined ? data.title : (existing.title || ''),
+        data.first_name !== undefined ? data.first_name : (existing.first_name || ''),
+        data.last_name !== undefined ? data.last_name : (existing.last_name || ''),
         data.name || existing.name,
+        data.password || existing.password || '123456',
         data.grade || existing.grade,
+        data.room !== undefined ? data.room : (existing.room || ''),
         data.status || existing.status,
         now,
-        email
+        existing.id
       );
     } else {
       this.db.prepare(`
-        INSERT INTO students (student_id, name, email, grade, status, pretest_completed, posttest_completed, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO students (
+          student_id, class_no, title, first_name, last_name, name,
+          email, username, password, grade, room, role, status,
+          pretest_completed, posttest_completed, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         data.student_id || `ID-${Date.now().toString().slice(-4)}`,
+        data.class_no || '',
+        data.title || '',
+        data.first_name || '',
+        data.last_name || '',
         data.name || '',
         email,
+        email,
+        data.password || '123456',
         data.grade || 'ม.1',
+        data.room || '',
+        'student',
         data.status || 'active',
         data.pretest_completed ? 1 : 0,
         data.posttest_completed ? 1 : 0,
@@ -320,7 +506,7 @@ class DatabaseManager {
 
   deleteStudent(email) {
     const cleanEmail = (email || '').trim().toLowerCase();
-    this.db.prepare('DELETE FROM students WHERE LOWER(email) = ?').run(cleanEmail);
+    this.db.prepare('DELETE FROM students WHERE LOWER(email) = ? OR LOWER(username) = ?').run(cleanEmail, cleanEmail);
     return true;
   }
 
@@ -330,8 +516,8 @@ class DatabaseManager {
     this.db.prepare(`
       UPDATE students
       SET pretest_completed = 0, posttest_completed = 0, updated_at = ?
-      WHERE LOWER(email) = ?
-    `).run(now, cleanEmail);
+      WHERE LOWER(email) = ? OR LOWER(username) = ?
+    `).run(now, cleanEmail, cleanEmail);
     return true;
   }
 
@@ -421,7 +607,6 @@ class DatabaseManager {
       submittedAt
     );
 
-    // อัปเดตสถานะในตาราง students
     if (data.test_type === 'Pre-test') {
       this.db.prepare('UPDATE students SET pretest_completed = 1, updated_at = ? WHERE LOWER(email) = ?').run(submittedAt, email);
     } else if (data.test_type === 'Post-test') {
@@ -436,7 +621,7 @@ class DatabaseManager {
       grade: data.grade || 'ม.1',
       test_type: data.test_type || 'Pre-test',
       score_total: Number(data.score_total || 0),
-      max_score: Number(data.max_score || 30),
+      max_score: Number(data.max_score || 75),
       score_percent: Number(data.score_percent || 0),
       domain_scores: dScores,
       time_spent_seconds: Number(data.time_spent_seconds || 0),
@@ -461,7 +646,7 @@ class DatabaseManager {
   }
 
   resetAndSeedDatabase() {
-    this.db.exec('DELETE FROM assessments; DELETE FROM students;');
+    this.db.exec('DELETE FROM assessments; DELETE FROM students; DELETE FROM admins;');
     this.seedDatabase();
     return this.getStatus();
   }
@@ -521,7 +706,7 @@ function parseBody(req) {
     let body = '';
     req.on('data', chunk => {
       body += chunk.toString();
-      if (body.length > 5 * 1024 * 1024) {
+      if (body.length > 10 * 1024 * 1024) {
         reject(new Error('Payload too large'));
       }
     });
@@ -559,6 +744,29 @@ const server = http.createServer(async (req, res) => {
     try {
       if (pathname === '/api/status' && req.method === 'GET') {
         return sendJson(res, 200, { status: 'success', data: dbManager.getStatus() });
+      }
+
+      if (pathname === '/api/auth/login' && req.method === 'POST') {
+        const body = await parseBody(req);
+        const result = dbManager.authenticateUser(body.username, body.password, body.loginRole || 'any');
+        if (!result.success) {
+          return sendJson(res, 401, { status: 'error', message: result.message });
+        }
+        return sendJson(res, 200, { status: 'success', data: result.user });
+      }
+
+      if (pathname === '/api/auth/change-password' && req.method === 'POST') {
+        const body = await parseBody(req);
+        const result = dbManager.changePassword(
+          body.username,
+          body.currentPassword,
+          body.newPassword,
+          Boolean(body.isAdminReset)
+        );
+        if (!result.success) {
+          return sendJson(res, 400, { status: 'error', message: result.message });
+        }
+        return sendJson(res, 200, { status: 'success', message: result.message });
       }
 
       if (pathname === '/api/students' && req.method === 'GET') {
@@ -614,7 +822,8 @@ const server = http.createServer(async (req, res) => {
         const dump = {
           metadata: dbManager.getStatus(),
           students: dbManager.getStudents(),
-          assessments: dbManager.getAssessments('all')
+          assessments: dbManager.getAssessments('all'),
+          admins: dbManager.getAdmins()
         };
         return sendJson(res, 200, { status: 'success', data: dump });
       }

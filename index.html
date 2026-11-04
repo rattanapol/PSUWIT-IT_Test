@@ -41,6 +41,9 @@
         <button id="btnHeaderAdminLink" class="btn btn-sm btn-primary hidden" title="เข้าสู่หน้าผู้ดูแลระบบ">
           🛡️ ผู้ดูแลระบบ
         </button>
+        <button id="btnHeaderChangePassword" class="btn btn-sm btn-secondary" title="เปลี่ยนรหัสผ่านของฉัน" onclick="App.openChangePasswordModal()">
+          🔑 เปลี่ยนรหัสผ่าน
+        </button>
         <button class="btn btn-sm btn-secondary btn-logout" title="ออกจากระบบ">
           ออกจากระบบ
         </button>
@@ -52,7 +55,7 @@
   <main class="main-content">
 
     <!-- ============================================================== -->
-    <!-- VIEW 1: AUTHENTICATION (เข้าสู่ระบบ นักเรียน & ผู้ดูแลระบบ) -->
+    <!-- VIEW 1: AUTHENTICATION (เข้าสู่ระบบด้วย Username & Password)    -->
     <!-- ============================================================== -->
     <section id="view-auth" class="view-section active">
       <div class="auth-wrapper">
@@ -73,162 +76,127 @@
               </button>
             </div>
 
-            <!-- Student Login Container (2-Step Flow: Step 1 Gmail @psuwit.ac.th SSO -> Step 2 Name & Grade) -->
+            <!-- Student Login Container (Username & Password) -->
             <div id="studentLoginContainer">
-
-              <!-- STEP 1: Google / Gmail Organization (@psuwit.ac.th) Sign-In -->
-              <div id="studentSsoForm">
-                <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl mb-4 flex items-center justify-between">
-                  <div>
-                    <div class="text-xs font-bold text-indigo-900">🔐 ขั้นตอนที่ 1 / 2 : ล็อกอินด้วย Gmail องค์กร (@psuwit.ac.th)</div>
-                    <div class="text-xs text-indigo-700 mt-0.5">ต้องยืนยันตัวตนผ่าน Google Workspace ของโรงเรียนก่อนเข้าทำแบบทดสอบ</div>
-                  </div>
-                  <span class="badge badge-primary">Step 1</span>
+              <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl mb-4 flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-bold text-indigo-900">🔐 เข้าสู่ระบบสำหรับนักเรียน (Username &amp; Password)</div>
+                  <div class="text-xs text-indigo-700 mt-0.5">ใช้ชื่อผู้ใช้งานและรหัสผ่านที่กำหนดในระบบโรงเรียน</div>
                 </div>
-
-                <!-- Error Banner when wrong domain (@gmail.com) is used -->
-                <div id="googleAuthErrorBanner" class="hidden p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold"></div>
-
-                <!-- Google Sign-In Box -->
-                <div class="p-5 bg-slate-50 border border-slate-200 rounded-2xl text-center mb-3">
-                  <div class="mx-auto mb-3 flex items-center justify-center" style="width: 48px; height: 48px; border-radius: 50%; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-                    <svg width="24" height="24" viewBox="0 0 48 48">
-                      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                    </svg>
-                  </div>
-                  <div class="font-bold text-slate-800 text-sm mb-1">Google Workspace Single Sign-On (SSO)</div>
-                  <p class="text-xs text-slate-500 mb-4">
-                    กรุณาลงชื่อเข้าใช้ด้วยบัญชี Gmail ของโรงเรียน<br>
-                    รูปแบบ <strong class="text-indigo-600">รหัสนักเรียน 4 หลัก@psuwit.ac.th</strong> (เช่น <code>1001@psuwit.ac.th</code>)
-                  </p>
-
-                  <button
-                    type="button"
-                    id="btnGoogleSignIn"
-                    class="btn"
-                    style="width: 100%; background: #ffffff; color: #1e293b; border: 1.5px solid #cbd5e1; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; padding: 0.75rem 1rem; box-shadow: 0 2px 6px rgba(15,23,42,0.06);"
-                  >
-                    <svg width="20" height="20" viewBox="0 0 48 48">
-                      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                    </svg>
-                    <span>ลงชื่อเข้าใช้ด้วย Google (@psuwit.ac.th)</span>
-                  </button>
-                </div>
-
-                <p class="form-help text-center">
-                  🔒 ระบบอนุญาตเฉพาะเมลองค์กร <strong>@psuwit.ac.th</strong> เท่านั้น (ไม่อนุญาตบัญชี @gmail.com ทั่วไป)
-                </p>
+                <span class="badge badge-primary">Student</span>
               </div>
 
-              <!-- STEP 2: ระบุชื่อ-นามสกุล และระดับชั้น (แสดงหลังจากล็อกอิน Gmail @psuwit.ac.th ผ่านแล้วเท่านั้น) -->
-              <form id="studentProfileForm" class="hidden">
-                <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl mb-4">
-                  <div class="flex justify-between items-center">
-                    <div class="flex items-center gap-2">
-                      <svg width="18" height="18" viewBox="0 0 48 48">
-                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                      </svg>
-                      <div>
-                        <div class="text-xs font-bold text-emerald-900">✅ ล็อกอิน Gmail องค์กรสำเร็จ (ขั้นตอนที่ 2 / 2)</div>
-                        <div class="text-xs text-emerald-800 mt-0.5">
-                          บัญชี: <strong id="verifiedSsoEmailDisplay">-</strong>
-                          (รหัสนักเรียน: <strong id="verifiedSsoIdDisplay">-</strong>)
-                        </div>
-                      </div>
-                    </div>
-                    <button type="button" id="btnChangeSsoAccount" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.6rem; font-size: 0.72rem;">
-                      สลับบัญชี
+              <div id="studentAuthErrorBanner" class="hidden p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold"></div>
+
+              <form id="studentCredentialsForm">
+                <div class="form-group">
+                  <label class="form-label" for="loginStudentUsername">ชื่อผู้ใช้งาน (Username) *</label>
+                  <input
+                    type="text"
+                    id="loginStudentUsername"
+                    class="form-control"
+                    placeholder="เช่น 6166@psuwit.ac.th หรือรหัสนักเรียน 6166"
+                    autocomplete="username"
+                    required
+                  >
+                  <p class="form-help">สามารถกรอกอีเมลเต็ม เช่น <code>6166@psuwit.ac.th</code> หรือเฉพาะรหัสนักเรียน 4 หลัก เช่น <code>6166</code></p>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="loginStudentPassword">รหัสผ่าน (Password) *</label>
+                  <div class="flex gap-2">
+                    <input
+                      type="password"
+                      id="loginStudentPassword"
+                      class="form-control"
+                      placeholder="กรอกรหัสผ่านของคุณ (ค่าเริ่มต้น 123456)"
+                      autocomplete="current-password"
+                      required
+                    >
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      onclick="App.togglePasswordVisibility('loginStudentPassword', this)"
+                      title="แสดง/ซ่อนรหัสผ่าน"
+                      style="white-space: nowrap;"
+                    >
+                      👁️ แสดง
                     </button>
                   </div>
                 </div>
 
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem;">
+                  🚀 เข้าสู่ระบบทำแบบทดสอบ
+                </button>
+              </form>
+
+              <div class="mt-4 pt-3 border-t border-slate-200 flex justify-between items-center text-xs">
+                <span class="text-slate-500">ต้องการเปลี่ยนรหัสผ่านของคุณ?</span>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="App.openChangePasswordModal()">
+                  🔑 แก้ไขรหัสผ่านด้วยตนเอง
+                </button>
+              </div>
+            </div>
+
+            <!-- Admin Login Container (Username & Password สำหรับผู้ดูแลระบบ) -->
+            <div id="adminLoginForm" class="hidden">
+              <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl mb-4 flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-bold text-amber-900">🛡️ เข้าสู่ระบบผู้ดูแลระบบ (Admin Only)</div>
+                  <div class="text-xs text-amber-800 mt-0.5">จำกัดสิทธิ์เฉพาะบัญชีผู้ดูแลระบบในฐานข้อมูลเท่านั้น</div>
+                </div>
+                <span class="badge badge-warning">Admin</span>
+              </div>
+
+              <div id="adminAuthErrorBanner" class="hidden p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold"></div>
+
+              <form id="adminCredentialsForm">
                 <div class="form-group">
-                  <label class="form-label" for="loginStudentName">ระบุชื่อ - นามสกุล นักเรียน *</label>
+                  <label class="form-label" for="loginAdminUsername">ชื่อผู้ใช้งานผู้ดูแลระบบ (Admin Username) *</label>
                   <input
                     type="text"
-                    id="loginStudentName"
+                    id="loginAdminUsername"
                     class="form-control"
-                    placeholder="เช่น เด็กชายกิตติศักดิ์ มณีโชติ"
+                    placeholder="เช่น winai@psuwit.ac.th, knok@psuwit.ac.th, 00001@psuwit.ac.th"
+                    autocomplete="username"
                     required
                   >
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label" for="loginStudentGrade">เลือกระดับชั้นมัธยมศึกษา *</label>
-                  <select id="loginStudentGrade" class="form-control" required>
-                    <option value="" disabled selected>-- กรุณาเลือกระดับชั้น --</option>
-                    <option value="ม.1">มัธยมศึกษาปีที่ 1 (ม.1)</option>
-                    <option value="ม.2">มัธยมศึกษาปีที่ 2 (ม.2)</option>
-                    <option value="ม.3">มัธยมศึกษาปีที่ 3 (ม.3)</option>
-                    <option value="ม.4">มัธยมศึกษาปีที่ 4 (ม.4)</option>
-                    <option value="ม.5">มัธยมศึกษาปีที่ 5 (ม.5)</option>
-                    <option value="ม.6">มัธยมศึกษาปีที่ 6 (ม.6)</option>
-                  </select>
+                  <label class="form-label" for="loginAdminPassword">รหัสผ่านผู้ดูแลระบบ (Password) *</label>
+                  <div class="flex gap-2">
+                    <input
+                      type="password"
+                      id="loginAdminPassword"
+                      class="form-control"
+                      placeholder="กรอกรหัสผ่านผู้ดูแลระบบ"
+                      autocomplete="current-password"
+                      required
+                    >
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      onclick="App.togglePasswordVisibility('loginAdminPassword', this)"
+                      title="แสดง/ซ่อนรหัสผ่าน"
+                      style="white-space: nowrap;"
+                    >
+                      👁️ แสดง
+                    </button>
+                  </div>
                 </div>
 
-                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem; background: linear-gradient(135deg, #059669, #10B981);">
-                  ยืนยันข้อมูลและเข้าทำแบบทดสอบ 🚀
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem;">
+                  🛡️ เข้าสู่ระบบผู้ดูแลระบบ (Admin)
                 </button>
               </form>
 
-            </div>
-
-            <!-- Admin Login Container (เฉพาะ winai@psuwit.ac.th หรือผู้ดูแลระบบที่ได้รับอนุญาตเท่านั้น) -->
-            <div id="adminLoginForm" class="hidden">
-              <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl mb-4 flex items-center justify-between">
-                <div>
-                  <div class="text-xs font-bold text-amber-900">🛡️ เข้าสู่ระบบผู้ดูแลระบบ (Admin Only)</div>
-                  <div class="text-xs text-amber-800 mt-0.5">จำกัดสิทธิ์เฉพาะอีเมลผู้ดูแลระบบที่ได้รับอนุญาตเท่านั้น</div>
-                </div>
-                <span class="badge badge-warning">Admin</span>
-              </div>
-
-              <!-- Error Banner when non-admin email tries to access -->
-              <div id="adminAuthErrorBanner" class="hidden p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold"></div>
-
-              <div class="p-5 bg-slate-50 border border-slate-200 rounded-2xl text-center mb-3">
-                <div class="mx-auto mb-3 flex items-center justify-center" style="width: 48px; height: 48px; border-radius: 50%; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-                  <svg width="24" height="24" viewBox="0 0 48 48">
-                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                  </svg>
-                </div>
-                <div class="font-bold text-slate-800 text-sm mb-1">ยืนยันตัวตนผู้ดูแลระบบด้วย Google</div>
-                <p class="text-xs text-slate-500 mb-4">
-                  เข้าใช้งานได้เฉพาะบัญชีผู้ดูแลระบบ เช่น <code class="text-indigo-600 font-bold">winai@psuwit.ac.th</code><br>
-                  หรืออีเมลผู้ดูแลระบบที่ถูกเพิ่มไว้ในฐานข้อมูลเท่านั้น
-                </p>
-
-                <button
-                  type="button"
-                  id="btnAdminGoogleSignIn"
-                  class="btn"
-                  style="width: 100%; background: #ffffff; color: #1e293b; border: 1.5px solid #cbd5e1; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; padding: 0.75rem 1rem; box-shadow: 0 2px 6px rgba(15,23,42,0.06);"
-                >
-                  <svg width="20" height="20" viewBox="0 0 48 48">
-                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                  </svg>
-                  <span>เข้าสู่ระบบ Admin ด้วย Google (@psuwit.ac.th)</span>
+              <div class="mt-4 pt-3 border-t border-slate-200 flex justify-between items-center text-xs">
+                <span class="text-slate-500">ต้องการเปลี่ยนรหัสผ่านผู้ดูแลระบบ?</span>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="App.openChangePasswordModal()">
+                  🔑 แก้ไขรหัสผ่านด้วยตนเอง
                 </button>
               </div>
-
-              <p class="form-help text-center">
-                🔒 เฉพาะผู้ใช้อีเมล <strong>winai@psuwit.ac.th</strong> และผู้ดูแลที่ได้รับสิทธิ์เท่านั้น
-              </p>
             </div>
           </div>
         </div>
@@ -242,17 +210,27 @@
       <div style="max-width: 1000px; margin: 0 auto;">
         <!-- Welcome Card -->
         <div class="stat-card mb-6" style="background: linear-gradient(135deg, #1E1B4B 0%, #312E81 100%); color: white;">
-          <div class="flex justify-between items-center">
+          <div class="flex justify-between items-center flex-wrap gap-3">
             <div>
               <span class="badge" style="background: rgba(255,255,255,0.2); color: #FDE68A; margin-bottom: 0.5rem;">
                 พอร์ทัลนักเรียน
               </span>
               <h2 class="text-xl font-bold" id="portalStudentName">ชื่อนักเรียน</h2>
               <p class="text-sm text-indigo-200 mt-1">
-                อีเมล: <span id="portalStudentEmail">-</span> | 
+                Username: <span id="portalStudentEmail">-</span> | 
                 รหัสนักเรียน: <span id="portalStudentId">-</span> | 
                 ระดับชั้น: <span id="portalStudentGrade" class="font-bold text-amber-300">-</span>
               </p>
+            </div>
+            <div>
+              <button
+                type="button"
+                class="btn btn-sm"
+                style="background: rgba(255,255,255,0.16); color: #ffffff; border: 1px solid rgba(255,255,255,0.35);"
+                onclick="App.openChangePasswordModal()"
+              >
+                🔑 เปลี่ยนรหัสผ่านของฉัน
+              </button>
             </div>
           </div>
         </div>
@@ -542,11 +520,32 @@
 
         <!-- Tab 3: Student Management (3.4 จัดการข้อมูล user ได้) -->
         <div id="adminPane-students" class="admin-tab-pane">
-          <div class="flex justify-between items-center mb-4">
-            <h3 class="font-bold text-lg">รายชื่อผู้ใช้งานและนักเรียนในระบบ</h3>
-            <button class="btn btn-primary btn-sm" onclick="AdminController.openAddStudent()">
-              ➕ เพิ่มนักเรียนใหม่
-            </button>
+          <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+            <div>
+              <h3 class="font-bold text-lg">รายชื่อผู้ใช้งานและนักเรียนในระบบ (จากฐานข้อมูล user.xlsx)</h3>
+              <p class="text-xs text-slate-500" id="adminStudentsCountLabel">กำลังโหลดข้อมูล...</p>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <select id="adminStudentGradeFilter" class="form-control" style="width: auto; padding: 0.4rem 0.8rem;">
+                <option value="all">ทุกระดับชั้น (ม.1 - ม.6)</option>
+                <option value="ม.1">ม.1</option>
+                <option value="ม.2">ม.2</option>
+                <option value="ม.3">ม.3</option>
+                <option value="ม.4">ม.4</option>
+                <option value="ม.5">ม.5</option>
+                <option value="ม.6">ม.6</option>
+              </select>
+              <input
+                type="text"
+                id="adminStudentSearchInput"
+                class="form-control"
+                placeholder="🔍 ค้นหารหัสนักเรียน, ชื่อ, Username..."
+                style="width: 240px; padding: 0.4rem 0.8rem;"
+              >
+              <button class="btn btn-primary btn-sm" onclick="AdminController.openAddStudent()">
+                ➕ เพิ่มนักเรียนใหม่
+              </button>
+            </div>
           </div>
 
           <div class="table-responsive">
@@ -556,8 +555,8 @@
                   <th class="text-center">#</th>
                   <th>รหัสนักเรียน</th>
                   <th>ชื่อ-นามสกุล</th>
-                  <th>อีเมล (@psuwit.ac.th)</th>
-                  <th class="text-center">ระดับชั้น</th>
+                  <th>Username</th>
+                  <th class="text-center">ชั้น / ห้อง (เลขที่)</th>
                   <th class="text-center">Pre / Post Test</th>
                   <th class="text-center">สถานะ</th>
                   <th class="text-center">จัดการ</th>
@@ -566,6 +565,9 @@
               <tbody id="adminStudentsTableBody"></tbody>
             </table>
           </div>
+
+          <!-- Pagination Controls for Students -->
+          <div id="adminStudentsPagination" class="flex justify-between items-center mt-4 text-xs text-slate-600"></div>
         </div>
 
         <!-- Tab 3.5: Admin Management (จัดการผู้ดูแลระบบ เพิ่ม/ลบ ผู้ดูแล) -->
@@ -575,12 +577,12 @@
             <div class="stat-card">
               <h3 class="font-bold text-lg mb-1">➕ เพิ่มผู้ดูแลระบบใหม่ (Add Admin)</h3>
               <p class="text-xs text-slate-500 mb-4">
-                กำหนดสิทธิ์ให้อีเมลองค์กร (<code>@psuwit.ac.th</code>) สามารถเข้าใช้งานหน้าผู้ดูแลระบบได้
+                กำหนดสิทธิ์ให้ผู้ดูแลระบบสามารถเข้าใช้งานด้วย Username และ Password ได้
               </p>
 
               <form id="adminAddManageForm">
                 <div class="form-group">
-                  <label class="form-label" for="newAdminEmail">อีเมลผู้ดูแลระบบ (@psuwit.ac.th) *</label>
+                  <label class="form-label" for="newAdminEmail">Username / อีเมลผู้ดูแลระบบ (@psuwit.ac.th) *</label>
                   <input
                     type="email"
                     id="newAdminEmail"
@@ -601,6 +603,18 @@
                   >
                 </div>
 
+                <div class="form-group">
+                  <label class="form-label" for="newAdminPassword">รหัสผ่านเริ่มต้น (Password) *</label>
+                  <input
+                    type="text"
+                    id="newAdminPassword"
+                    class="form-control"
+                    value="123456"
+                    placeholder="ค่าเริ่มต้น 123456"
+                    required
+                  >
+                </div>
+
                 <button type="submit" class="btn btn-primary btn-sm mt-2">
                   ➕ เพิ่มสิทธิ์ผู้ดูแลระบบ
                 </button>
@@ -611,10 +625,11 @@
             <div class="stat-card">
               <h3 class="font-bold text-lg mb-2">🛡️ นโยบายความปลอดภัยผู้ดูแลระบบ</h3>
               <div class="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-2 leading-relaxed">
-                <div>👑 <strong>ผู้ดูแลระบบหลัก (Super Admin):</strong> <code>winai@psuwit.ac.th</code></div>
-                <div>• เฉพาะผู้ที่มีรายชื่ออีเมลอยู่ในตารางผู้ดูแลระบบด้านล่างนี้เท่านั้น ที่สามารถล็อกอินเข้าสู่แดชบอร์ดผู้ดูแลระบบได้</div>
-                <div>• บัญชีหลัก <code>winai@psuwit.ac.th</code> ได้รับการคุ้มครองในระบบ ไม่สามารถถูกลบสิทธิ์ได้</div>
-                <div>• ผู้ดูแลระบบที่ถูกเพิ่มใหม่ต้องใช้อีเมลองค์กรที่ลงท้ายด้วย <code>@psuwit.ac.th</code> เท่านั้น</div>
+                <div>👑 <strong>ผู้ดูแลระบบเริ่มต้นจาก <code>user.xlsx</code>:</strong></div>
+                <div>• <code>winai@psuwit.ac.th</code> — นายวินัย รัตนพล (Super Admin)</div>
+                <div>• <code>knok@psuwit.ac.th</code> — นางสาวกนก กล่อมขจิต (Admin)</div>
+                <div>• <code>00001@psuwit.ac.th</code> — นายดูแลระบบ เทพสุดสุด (Super Admin)</div>
+                <div>• ผู้ดูแลระบบและนักเรียนทุกคนสามารถเปลี่ยนรหัสผ่านของตนเองได้ผ่านปุ่ม <strong>🔑 เปลี่ยนรหัสผ่าน</strong></div>
               </div>
             </div>
           </div>
@@ -628,7 +643,7 @@
                   <tr>
                     <th class="text-center">#</th>
                     <th>ชื่อ - นามสกุล</th>
-                    <th>อีเมล (@psuwit.ac.th)</th>
+                    <th>Username (@psuwit.ac.th)</th>
                     <th class="text-center">ระดับสิทธิ์</th>
                     <th class="text-center">วันที่เพิ่ม</th>
                     <th class="text-center">จัดการ</th>
@@ -650,7 +665,7 @@
                 <span id="dbStatusBadge" class="badge badge-success">เชื่อมต่อแล้ว (Active)</span>
               </div>
               <p class="text-xs text-slate-500 mb-4">
-                ระบบจัดเก็บข้อมูลในรูปแบบฐานข้อมูลเชิงสัมพันธ์ (Relational Database: SQLite 3 + IndexedDB) พร้อมโครงสร้างตารางมาตรฐาน SQL
+                ระบบจัดเก็บข้อมูลในรูปแบบฐานข้อมูลเชิงสัมพันธ์ (Relational Database: SQLite 3 + IndexedDB) พร้อมข้อมูลผู้ใช้งานจาก <code>user.xlsx</code>
               </p>
 
               <div class="space-y-2 text-sm bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
@@ -702,48 +717,24 @@
 
               <div class="space-y-3 text-xs">
                 <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
-                  <div class="font-bold text-indigo-900 mb-1">1. ตาราง <code>students</code> (ข้อมูลนักเรียน)</div>
+                  <div class="font-bold text-indigo-900 mb-1">1. ตาราง <code>students</code> (นักเรียน 1,465 คน จาก user.xlsx)</div>
                   <div class="text-indigo-800 leading-relaxed">
-                    <code>id (PK)</code>, <code>student_id</code>, <code>name</code>, <code>email (UNIQUE)</code>, <code>grade</code>, <code>status</code>, <code>pretest_completed</code>, <code>posttest_completed</code>, <code>created_at</code>, <code>updated_at</code>
+                    <code>id (PK)</code>, <code>student_id</code>, <code>class_no</code>, <code>title</code>, <code>first_name</code>, <code>last_name</code>, <code>name</code>, <code>username (UNIQUE)</code>, <code>password</code>, <code>grade</code>, <code>room</code>, <code>status</code>, <code>pretest_completed</code>, <code>posttest_completed</code>
                   </div>
                 </div>
 
                 <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                  <div class="font-bold text-emerald-900 mb-1">2. ตาราง <code>assessments</code> (ผลการทดสอบสมรรถนะ 6 ด้าน)</div>
+                  <div class="font-bold text-emerald-900 mb-1">2. ตาราง <code>assessments</code> &amp; <code>admins</code></div>
                   <div class="text-emerald-800 leading-relaxed">
-                    <code>id (PK)</code>, <code>test_id (UNIQUE)</code>, <code>student_id</code>, <code>student_name</code>, <code>email (FK)</code>, <code>grade</code>, <code>test_type</code>, <code>score_total</code>, <code>max_score</code>, <code>score_percent</code>, <code>d1_score..d6_score</code>, <code>time_spent_seconds</code>, <code>violations_count</code>, <code>passed</code>, <code>submitted_at</code>
+                    <code>assessments</code> (ผลสอบรายด้าน D1-D6 คะแนนเต็ม 75 คะแนน) และ <code>admins</code> (ผู้ดูแลระบบพร้อมรหัสผ่าน)
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Card 3: ตั้งค่า Google OAuth 2.0 (Gmail @psuwit.ac.th SSO) & Cloud Sync -->
-          <div class="grid grid-cols-2 gap-6">
-            <div class="stat-card">
-              <h3 class="font-bold text-base mb-1">🔑 ตั้งค่า Google OAuth 2.0 (Gmail @psuwit.ac.th SSO)</h3>
-              <p class="text-xs text-slate-500 mb-3">
-                ระบุ Google OAuth Client ID จาก Google Cloud Console เพื่อเปิดใช้งานหน้าต่างล็อกอิน Google ของจริง (จำกัดโดเมน <code>hd=psuwit.ac.th</code> อัตโนมัติ)
-              </p>
-
-              <div class="form-group">
-                <label class="form-label" for="settingsGoogleClientId">Google OAuth 2.0 Client ID</label>
-                <input
-                  type="text"
-                  id="settingsGoogleClientId"
-                  class="form-control"
-                  placeholder="เช่น 1234567890-abcdefg.apps.googleusercontent.com"
-                >
-                <p class="form-help">หากยังไม่ได้ระบุ ระบบจะเปิดหน้าต่างจำลอง Google Workspace SSO (@psuwit.ac.th) เพื่อให้ทดสอบระบบได้ทันที</p>
-              </div>
-
-              <div class="flex gap-2 mt-3">
-                <button type="button" id="btnSaveGoogleClientId" class="btn btn-primary btn-sm">
-                  💾 บันทึก Google Client ID
-                </button>
-              </div>
-            </div>
-
+          <!-- Card 3: Cloud Sync -->
+          <div class="grid grid-cols-1 gap-6">
             <div class="stat-card">
               <h3 class="font-bold text-base mb-1">☁️ เชื่อมต่อ Cloud Sync เสริม (External Webhook / Google Sheets)</h3>
               <p class="text-xs text-slate-500 mb-3">
@@ -779,79 +770,74 @@
   </main>
 
   <!-- ============================================================== -->
-  <!-- MODAL: GOOGLE WORKSPACE (@psuwit.ac.th) SIGN-IN POPUP          -->
+  <!-- MODAL: CHANGE PASSWORD (แก้ไขรหัสผ่านสำหรับผู้ใช้งานทุกคน)         -->
   <!-- ============================================================== -->
-  <div id="googleOAuthModal" class="modal-overlay">
-    <div class="modal-content" style="max-width: 440px; border-radius: 16px; padding: 2rem;">
-      <div class="text-center mb-4">
-        <div class="mx-auto mb-2 flex items-center justify-center">
-          <svg width="36" height="36" viewBox="0 0 48 48">
-            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-          </svg>
-        </div>
-        <h3 id="googleModalTitle" class="text-xl font-bold text-slate-900">ลงชื่อเข้าใช้ด้วย Google</h3>
-        <p id="googleModalSubtitle" class="text-xs text-slate-500 mt-1">
-          ใช้บัญชี Google Workspace องค์กร (<strong>@psuwit.ac.th</strong>) เพื่อดำเนินการต่อยัง<br>
-          <span class="font-semibold text-indigo-600">PSU.WIT IT Competency Assessment</span>
-        </p>
+  <div id="changePasswordModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 440px; border-radius: 16px; padding: 1.75rem;">
+      <div class="modal-header" style="margin-bottom: 1rem;">
+        <h3 class="text-lg font-bold">🔑 แก้ไขรหัสผ่าน (Change Password)</h3>
+        <button class="modal-close" onclick="App.closeChangePasswordModal()">&times;</button>
       </div>
 
-      <!-- Google Sign-In Step 1: Enter @psuwit.ac.th Email -->
-      <form id="googleModalEmailForm">
+      <p class="text-xs text-slate-500 mb-4">
+        ผู้ใช้งานทุกคน (นักเรียนและผู้ดูแลระบบ) สามารถเปลี่ยนรหัสผ่านของตนเองได้โดยกรอกรหัสผ่านปัจจุบันและตั้งรหัสผ่านใหม่
+      </p>
+
+      <div id="changePwdFeedback" class="hidden p-3 mb-4 rounded-xl text-xs font-semibold"></div>
+
+      <form id="changePasswordForm">
         <div class="form-group">
-          <label class="form-label" for="googleModalEmailInput">อีเมลองค์กร (@psuwit.ac.th)</label>
+          <label class="form-label" for="changePwdUsername">ชื่อผู้ใช้งาน (Username) *</label>
           <input
-            type="email"
-            id="googleModalEmailInput"
+            type="text"
+            id="changePwdUsername"
             class="form-control"
-            placeholder="เช่น 1001@psuwit.ac.th"
+            placeholder="เช่น 6166@psuwit.ac.th หรือ winai@psuwit.ac.th"
             required
           >
-          <div id="googleModalEmailError" class="hidden text-xs text-red-600 font-semibold mt-2"></div>
-          <p class="form-help mt-1">
-            ต้องเป็นบัญชี Gmail ของโรงเรียนที่ลงท้ายด้วย <strong>@psuwit.ac.th</strong> เท่านั้น (เช่น <code>1001@psuwit.ac.th</code>)
-          </p>
-        </div>
-
-        <div class="flex justify-between items-center mt-6">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="App.closeGoogleModal()">
-            ยกเลิก
-          </button>
-          <button type="submit" class="btn btn-primary btn-sm" style="background: #1a73e8; padding: 0.55rem 1.4rem;">
-            ถัดไป
-          </button>
-        </div>
-      </form>
-
-      <!-- Google Sign-In Step 2: Enter Google Account Password -->
-      <form id="googleModalPasswordForm" class="hidden">
-        <div class="flex items-center justify-center mb-4">
-          <span id="googleModalAccountPill" class="px-3 py-1 rounded-full border border-slate-300 text-xs font-semibold text-slate-700 bg-slate-50">
-            1001@psuwit.ac.th
-          </span>
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="googleModalPasswordInput">ป้อนรหัสผ่านบัญชี Google ของคุณ</label>
+          <label class="form-label" for="changePwdCurrent">รหัสผ่านปัจจุบัน (Current Password) *</label>
           <input
             type="password"
-            id="googleModalPasswordInput"
+            id="changePwdCurrent"
             class="form-control"
-            placeholder="รหัสผ่าน Gmail (@psuwit.ac.th)"
+            placeholder="กรอกรหัสผ่านปัจจุบันของคุณ"
             required
           >
-          <div id="googleModalPasswordError" class="hidden text-xs text-red-600 font-semibold mt-2"></div>
         </div>
 
-        <div class="flex justify-between items-center mt-6">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="App.backToGoogleEmailStep()">
-            ← เปลี่ยนอีเมล
+        <div class="form-group">
+          <label class="form-label" for="changePwdNew">รหัสผ่านใหม่ (New Password) *</label>
+          <input
+            type="password"
+            id="changePwdNew"
+            class="form-control"
+            placeholder="ตั้งรหัสผ่านใหม่ (อย่างน้อย 4 ตัวอักษร)"
+            minlength="4"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="changePwdConfirm">ยืนยันรหัสผ่านใหม่ (Confirm New Password) *</label>
+          <input
+            type="password"
+            id="changePwdConfirm"
+            class="form-control"
+            placeholder="กรอกรหัสผ่านใหม่อีกครั้งให้ตรงกัน"
+            minlength="4"
+            required
+          >
+        </div>
+
+        <div class="flex justify-end gap-2 mt-5">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="App.closeChangePasswordModal()">
+            ยกเลิก
           </button>
-          <button type="submit" class="btn btn-primary btn-sm" style="background: #1a73e8; padding: 0.55rem 1.4rem;">
-            ลงชื่อเข้าใช้
+          <button type="submit" class="btn btn-primary btn-sm">
+            💾 บันทึกรหัสผ่านใหม่
           </button>
         </div>
       </form>
@@ -868,28 +854,46 @@
         <button class="modal-close" onclick="document.getElementById('studentModal').classList.remove('active')">&times;</button>
       </div>
       <form id="studentManageForm">
-        <div class="form-group">
-          <label class="form-label" for="formStudentId">รหัสนักเรียน (4 หลัก)</label>
-          <input type="text" id="formStudentId" class="form-control" placeholder="เช่น 1001" pattern="[0-9]{4}" maxlength="4" required>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="form-group">
+            <label class="form-label" for="formStudentId">รหัสนักเรียน</label>
+            <input type="text" id="formStudentId" class="form-control" placeholder="เช่น 6166" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="formStudentClassNo">เลขที่</label>
+            <input type="text" id="formStudentClassNo" class="form-control" placeholder="เช่น 1">
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label" for="formStudentName">ชื่อ-นามสกุล</label>
-          <input type="text" id="formStudentName" class="form-control" placeholder="เช่น เด็กชายกิตติศักดิ์ มณีโชติ" required>
+          <input type="text" id="formStudentName" class="form-control" placeholder="เช่น เด็กชายกรธัช เด่นสันติกุล" required>
         </div>
-        <div class="form-group">
-          <label class="form-label" for="formStudentEmail">อีเมล SSO (รหัสนักเรียน 4 หลัก@psuwit.ac.th)</label>
-          <input type="email" id="formStudentEmail" class="form-control" placeholder="เช่น 1001@psuwit.ac.th" required>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="form-group">
+            <label class="form-label" for="formStudentEmail">Username (@psuwit.ac.th)</label>
+            <input type="email" id="formStudentEmail" class="form-control" placeholder="เช่น 6166@psuwit.ac.th" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="formStudentPassword">รหัสผ่าน (Password)</label>
+            <input type="text" id="formStudentPassword" class="form-control" placeholder="เช่น 123456" value="123456" required>
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label" for="formStudentGrade">ระดับชั้น</label>
-          <select id="formStudentGrade" class="form-control">
-            <option value="ม.1">มัธยมศึกษาปีที่ 1 (ม.1)</option>
-            <option value="ม.2">มัธยมศึกษาปีที่ 2 (ม.2)</option>
-            <option value="ม.3">มัธยมศึกษาปีที่ 3 (ม.3)</option>
-            <option value="ม.4">มัธยมศึกษาปีที่ 4 (ม.4)</option>
-            <option value="ม.5">มัธยมศึกษาปีที่ 5 (ม.5)</option>
-            <option value="ม.6">มัธยมศึกษาปีที่ 6 (ม.6)</option>
-          </select>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="form-group">
+            <label class="form-label" for="formStudentGrade">ระดับชั้น</label>
+            <select id="formStudentGrade" class="form-control">
+              <option value="ม.1">มัธยมศึกษาปีที่ 1 (ม.1)</option>
+              <option value="ม.2">มัธยมศึกษาปีที่ 2 (ม.2)</option>
+              <option value="ม.3">มัธยมศึกษาปีที่ 3 (ม.3)</option>
+              <option value="ม.4">มัธยมศึกษาปีที่ 4 (ม.4)</option>
+              <option value="ม.5">มัธยมศึกษาปีที่ 5 (ม.5)</option>
+              <option value="ม.6">มัธยมศึกษาปีที่ 6 (ม.6)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="formStudentRoom">ห้องเรียน</label>
+            <input type="text" id="formStudentRoom" class="form-control" placeholder="เช่น 1">
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label" for="formStudentStatus">สถานะการทำงาน</label>
@@ -920,6 +924,7 @@
   <!-- Application Scripts in Order -->
   <script src="js/config.js"></script>
   <script src="js/questions.js"></script>
+  <script src="js/users_data.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/charts.js"></script>
   <script src="js/certificate.js"></script>

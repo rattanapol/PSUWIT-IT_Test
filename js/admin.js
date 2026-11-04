@@ -3,13 +3,17 @@
  * - Dashboard ภาพรวมสถิติการทดสอบและกราฟเปรียบเทียบ
  * - ตารางบันทึกการสอบแบบ Real-time พร้อมตัวกรองรายระดับชั้น (ม.1 - ม.6) และค้นหา
  * - Export ข้อมูลผลการสอบแยกตามระดับชั้นเป็นไฟล์ CSV (รองรับภาษาไทย UTF-8 BOM สำหรับ Excel)
- * - การจัดการข้อมูลนักเรียน (เพิ่ม, ลบ, แก้ไข, ปรับสถานะ Active/Suspended, รีเซ็ตสิทธิ์การสอบ)
- * - จัดการตั้งค่าการเชื่อมต่อ Google Sheets API
+ * - การจัดการข้อมูลนักเรียนจากฐานข้อมูล user.xlsx (1,465 คน) พร้อมตัวกรอง ค้นหา แบ่งหน้า และเปลี่ยนรหัสผ่าน
+ * - การจัดการผู้ดูแลระบบ (Admin) และการสำรองฐานข้อมูล
  */
 
 const AdminController = {
   currentFilterGrade: "all",
   searchKeyword: "",
+  studentFilterGrade: "all",
+  studentSearchKeyword: "",
+  studentPage: 1,
+  studentPageSize: 50,
   activeTab: "dashboard", // "dashboard" | "assessments" | "students" | "admins" | "settings"
   cachedAssessments: [],
   cachedStudents: [],
@@ -48,6 +52,26 @@ const AdminController = {
       searchInput.addEventListener("input", (e) => {
         this.searchKeyword = e.target.value.trim().toLowerCase();
         this.renderAssessmentsTable();
+      });
+    }
+
+    // ตัวกรองระดับชั้นในตารางรายชื่อนักเรียน (1,465 คน)
+    const studentGradeFilter = document.getElementById("adminStudentGradeFilter");
+    if (studentGradeFilter) {
+      studentGradeFilter.addEventListener("change", (e) => {
+        this.studentFilterGrade = e.target.value;
+        this.studentPage = 1;
+        this.renderStudentsTable();
+      });
+    }
+
+    // ช่องค้นหารายชื่อนักเรียน
+    const studentSearchInput = document.getElementById("adminStudentSearchInput");
+    if (studentSearchInput) {
+      studentSearchInput.addEventListener("input", (e) => {
+        this.studentSearchKeyword = e.target.value.trim().toLowerCase();
+        this.studentPage = 1;
+        this.renderStudentsTable();
       });
     }
 
@@ -96,12 +120,6 @@ const AdminController = {
     const btnResetSeed = document.getElementById("btnResetSeedDb");
     if (btnResetSeed) {
       btnResetSeed.addEventListener("click", () => this.handleResetSeedDatabase());
-    }
-
-    // บันทึก Google OAuth Client ID
-    const btnSaveGoogleClient = document.getElementById("btnSaveGoogleClientId");
-    if (btnSaveGoogleClient) {
-      btnSaveGoogleClient.addEventListener("click", () => this.handleSaveGoogleClientId());
     }
 
     // การเชื่อมต่อ External Cloud / Google Sheets
@@ -162,20 +180,18 @@ const AdminController = {
     const passCount = postTests.filter((a) => a.passed).length;
     const passRate = postTests.length ? Math.round((passCount / postTests.length) * 100) : 0;
 
-    // อัปเดตตัวเลขในการ์ดสรุป
     const elTotalStudents = document.getElementById("statTotalStudents");
     const elTotalTests = document.getElementById("statTotalTests");
     const elPreAvg = document.getElementById("statPreAvg");
     const elPostAvg = document.getElementById("statPostAvg");
     const elPassRate = document.getElementById("statPassRate");
 
-    if (elTotalStudents) elTotalStudents.textContent = totalStudents;
-    if (elTotalTests) elTotalTests.textContent = totalTests;
+    if (elTotalStudents) elTotalStudents.textContent = totalStudents.toLocaleString();
+    if (elTotalTests) elTotalTests.textContent = totalTests.toLocaleString();
     if (elPreAvg) elPreAvg.textContent = `${preAvg}%`;
     if (elPostAvg) elPostAvg.textContent = `${postAvg}%`;
     if (elPassRate) elPassRate.textContent = `${passRate}%`;
 
-    // กราฟสรุปผล
     AssessmentCharts.renderAdminOverviewChart("adminOverviewChartCanvas", this.cachedAssessments);
   },
 
@@ -260,12 +276,10 @@ const AdminController = {
       .join("");
   },
 
-  // ดูผลการสอบแบบละเอียดของนักเรียนใน Modal
   viewAssessmentDetail(testId) {
     const item = this.cachedAssessments.find((a) => a.test_id === testId);
     if (!item) return;
 
-    // หาประวัติสอบอีกรอบหนึ่งของนักเรียนคนนี้ (ถ้ามี)
     const otherTest = this.cachedAssessments.find(
       (a) => a.email.toLowerCase() === item.email.toLowerCase() && a.test_id !== item.test_id
     );
@@ -283,7 +297,7 @@ const AdminController = {
         <div class="grid grid-cols-2 gap-4 mb-4 bg-slate-50 p-4 rounded-xl">
           <div><strong>ชื่อ-สกุล:</strong> ${item.student_name}</div>
           <div><strong>รหัสนักเรียน:</strong> ${item.student_id || "-"}</div>
-          <div><strong>อีเมล:</strong> ${item.email}</div>
+          <div><strong>Username:</strong> ${item.email}</div>
           <div><strong>ระดับชั้น:</strong> ${item.grade} (${item.test_type})</div>
           <div><strong>คะแนนรวม:</strong> ${item.score_total} / ${item.max_score} (${item.score_percent}%)</div>
           <div><strong>ตรวจจับการสลับจอ:</strong> ${item.violations_count} ครั้ง</div>
@@ -308,28 +322,59 @@ const AdminController = {
 
     modal.classList.add("active");
 
-    // วาดกราฟใยแมงมุมใน Modal
     setTimeout(() => {
       AssessmentCharts.renderRadarChart("modalRadarChartCanvas", item, otherTest);
     }, 100);
   },
 
-  // 3. เรนเดอร์ ตารางจัดการข้อมูลนักเรียน
+  // 3. เรนเดอร์ ตารางจัดการข้อมูลนักเรียน (พร้อมกรอง ค้นหา และแบ่งหน้าสำหรับ 1,465 คน)
   renderStudentsTable() {
     const tbody = document.getElementById("adminStudentsTableBody");
+    const countLabel = document.getElementById("adminStudentsCountLabel");
+    const paginationEl = document.getElementById("adminStudentsPagination");
     if (!tbody) return;
 
-    if (this.cachedStudents.length === 0) {
+    let filtered = [...this.cachedStudents];
+
+    if (this.studentFilterGrade !== "all") {
+      filtered = filtered.filter((s) => s.grade === this.studentFilterGrade);
+    }
+
+    if (this.studentSearchKeyword) {
+      const kw = this.studentSearchKeyword;
+      filtered = filtered.filter(
+        (s) =>
+          (s.name && s.name.toLowerCase().includes(kw)) ||
+          (s.email && s.email.toLowerCase().includes(kw)) ||
+          (s.username && s.username.toLowerCase().includes(kw)) ||
+          (s.student_id && String(s.student_id).toLowerCase().includes(kw))
+      );
+    }
+
+    const totalCount = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(totalCount / this.studentPageSize));
+    if (this.studentPage > totalPages) this.studentPage = totalPages;
+
+    const startIdx = (this.studentPage - 1) * this.studentPageSize;
+    const pageItems = filtered.slice(startIdx, startIdx + this.studentPageSize);
+
+    if (countLabel) {
+      countLabel.textContent = `พบนักเรียน ${totalCount.toLocaleString()} คน (จากทั้งหมด ${this.cachedStudents.length.toLocaleString()} คน) — หน้า ${this.studentPage} / ${totalPages}`;
+    }
+
+    if (pageItems.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="7" class="text-center py-6 text-slate-400">ยังไม่มีรายชื่อนักเรียนในระบบ</td>
+          <td colspan="8" class="text-center py-6 text-slate-400">ไม่พบรายชื่อนักเรียนที่ตรงกับเงื่อนไข</td>
         </tr>
       `;
+      if (paginationEl) paginationEl.innerHTML = "";
       return;
     }
 
-    tbody.innerHTML = this.cachedStudents
+    tbody.innerHTML = pageItems
       .map((student, idx) => {
+        const rowNum = startIdx + idx + 1;
         const isSuspended = student.status === "suspended";
         const statusBadge = isSuspended
           ? `<span class="badge badge-fail">ระงับชั่วคราว</span>`
@@ -337,19 +382,22 @@ const AdminController = {
 
         const preChecked = student.pretest_completed ? `<span class="text-emerald-500 font-bold">✓ ทำแล้ว</span>` : `<span class="text-slate-400">-</span>`;
         const postChecked = student.posttest_completed ? `<span class="text-emerald-500 font-bold">✓ ทำแล้ว</span>` : `<span class="text-slate-400">-</span>`;
+        const roomStr = student.room ? `/${student.room}` : "";
+        const classNoStr = student.class_no ? ` (#${student.class_no})` : "";
 
         return `
           <tr>
-            <td class="text-center">${idx + 1}</td>
+            <td class="text-center">${rowNum}</td>
             <td><strong>${student.student_id || "-"}</strong></td>
             <td>${student.name}</td>
-            <td class="text-xs">${student.email}</td>
-            <td class="text-center"><span class="badge badge-outline">${student.grade}</span></td>
+            <td class="text-xs font-medium text-indigo-700">${student.username || student.email}</td>
+            <td class="text-center"><span class="badge badge-outline">${student.grade}${roomStr}${classNoStr}</span></td>
             <td class="text-center">${preChecked} / ${postChecked}</td>
             <td class="text-center">${statusBadge}</td>
             <td class="text-center">
               <div class="flex items-center justify-center gap-1">
-                <button class="btn-icon" title="แก้ไข" onclick="AdminController.openEditStudent('${student.email}')">✏️</button>
+                <button class="btn-icon" title="แก้ไขข้อมูล" onclick="AdminController.openEditStudent('${student.email}')">✏️</button>
+                <button class="btn-icon" title="ตั้งรหัสผ่านใหม่" onclick="AdminController.handleResetUserPassword('${student.email}')">🔑</button>
                 <button class="btn-icon" title="รีเซ็ตสิทธิ์การสอบ" onclick="AdminController.handleResetAttempts('${student.email}')">🔄</button>
                 <button class="btn-icon" title="สลับสถานะ" onclick="AdminController.toggleStudentStatus('${student.email}')">⚡</button>
                 <button class="btn-icon text-red-500" title="ลบ" onclick="AdminController.handleDeleteStudent('${student.email}')">🗑️</button>
@@ -359,20 +407,72 @@ const AdminController = {
         `;
       })
       .join("");
+
+    if (paginationEl) {
+      paginationEl.innerHTML = `
+        <div>แสดงรายการที่ ${startIdx + 1} - ${Math.min(startIdx + this.studentPageSize, totalCount)} จาก ${totalCount.toLocaleString()} คน</div>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm"
+            ${this.studentPage <= 1 ? "disabled" : ""}
+            onclick="AdminController.goToStudentPage(${this.studentPage - 1})"
+          >
+            ← หน้าก่อนหน้า
+          </button>
+          <span class="font-semibold">หน้า ${this.studentPage} / ${totalPages}</span>
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm"
+            ${this.studentPage >= totalPages ? "disabled" : ""}
+            onclick="AdminController.goToStudentPage(${this.studentPage + 1})"
+          >
+            หน้าถัดไป →
+          </button>
+        </div>
+      `;
+    }
+  },
+
+  goToStudentPage(page) {
+    this.studentPage = Math.max(1, page);
+    this.renderStudentsTable();
+  },
+
+  async handleResetUserPassword(username) {
+    const newPwd = prompt(`🔑 กำหนดรหัสผ่านใหม่สำหรับบัญชี ${username} (อย่างน้อย 4 ตัวอักษร):`, "123456");
+    if (newPwd === null) return;
+    if (newPwd.trim().length < 4) {
+      alert("⚠️ รหัสผ่านต้องมีความยาวอย่างน้อย 4 ตัวอักษร");
+      return;
+    }
+    const res = await DB.changePassword(username, "", newPwd.trim(), true);
+    if (res.success) {
+      await this.refreshData();
+      alert(`✅ เปลี่ยนรหัสผ่านของ ${username} เป็น "${newPwd.trim()}" เรียบร้อยแล้ว`);
+    } else {
+      alert("❌ " + res.message);
+    }
   },
 
   openEditStudent(email) {
-    const student = this.cachedStudents.find((s) => s.email.toLowerCase() === email.toLowerCase());
+    const student = this.cachedStudents.find((s) => (s.email || "").toLowerCase() === email.toLowerCase());
     if (!student) return;
 
     const modal = document.getElementById("studentModal");
     if (!modal) return;
 
     document.getElementById("formStudentId").value = student.student_id || "";
+    const classNoEl = document.getElementById("formStudentClassNo");
+    if (classNoEl) classNoEl.value = student.class_no || "";
     document.getElementById("formStudentName").value = student.name || "";
     document.getElementById("formStudentEmail").value = student.email || "";
-    document.getElementById("formStudentEmail").readOnly = true; // ไม่อนุญาตให้แก้อีเมลที่เป็น Unique Key
+    document.getElementById("formStudentEmail").readOnly = true;
+    const pwdEl = document.getElementById("formStudentPassword");
+    if (pwdEl) pwdEl.value = student.password || "123456";
     document.getElementById("formStudentGrade").value = student.grade || "ม.1";
+    const roomEl = document.getElementById("formStudentRoom");
+    if (roomEl) roomEl.value = student.room || "";
     document.getElementById("formStudentStatus").value = student.status || "active";
     document.getElementById("studentModalTitle").textContent = "แก้ไขข้อมูลนักเรียน";
 
@@ -384,10 +484,16 @@ const AdminController = {
     if (!modal) return;
 
     document.getElementById("formStudentId").value = "";
+    const classNoEl = document.getElementById("formStudentClassNo");
+    if (classNoEl) classNoEl.value = "";
     document.getElementById("formStudentName").value = "";
     document.getElementById("formStudentEmail").value = "";
     document.getElementById("formStudentEmail").readOnly = false;
+    const pwdEl = document.getElementById("formStudentPassword");
+    if (pwdEl) pwdEl.value = "123456";
     document.getElementById("formStudentGrade").value = "ม.1";
+    const roomEl = document.getElementById("formStudentRoom");
+    if (roomEl) roomEl.value = "1";
     document.getElementById("formStudentStatus").value = "active";
     document.getElementById("studentModalTitle").textContent = "เพิ่มนักเรียนใหม่";
 
@@ -397,15 +503,18 @@ const AdminController = {
   async handleSaveStudent() {
     const studentData = {
       student_id: document.getElementById("formStudentId").value.trim(),
+      class_no: document.getElementById("formStudentClassNo")?.value.trim() || "",
       name: document.getElementById("formStudentName").value.trim(),
       email: document.getElementById("formStudentEmail").value.trim().toLowerCase(),
+      username: document.getElementById("formStudentEmail").value.trim().toLowerCase(),
+      password: document.getElementById("formStudentPassword")?.value.trim() || "123456",
       grade: document.getElementById("formStudentGrade").value,
+      room: document.getElementById("formStudentRoom")?.value.trim() || "",
       status: document.getElementById("formStudentStatus").value
     };
 
-    const orgRegex = APP_CONFIG.orgEmailRegex || /^[a-zA-Z0-9._%+-]+@psuwit\.ac\.th$/i;
-    if (!orgRegex.test(studentData.email)) {
-      alert("⚠️ กรุณากรอกอีเมลองค์กรที่ลงท้ายด้วย @psuwit.ac.th เท่านั้น (เช่น 1001@psuwit.ac.th)");
+    if (!studentData.email) {
+      alert("⚠️ กรุณากรอก Username / อีเมล");
       return;
     }
 
@@ -431,7 +540,7 @@ const AdminController = {
   },
 
   async toggleStudentStatus(email) {
-    const student = this.cachedStudents.find((s) => s.email.toLowerCase() === email.toLowerCase());
+    const student = this.cachedStudents.find((s) => (s.email || "").toLowerCase() === email.toLowerCase());
     if (student) {
       const newStatus = student.status === "active" ? "suspended" : "active";
       await DB.saveStudent({ ...student, status: newStatus });
@@ -455,27 +564,33 @@ const AdminController = {
 
     tbody.innerHTML = this.cachedAdmins
       .map((adm, idx) => {
-        const isPrimary = adm.email.toLowerCase() === "winai@psuwit.ac.th" || adm.role === "super_admin";
-        const roleBadge = isPrimary
-          ? `<span class="badge badge-warning font-bold">👑 ผู้ดูแลหลัก (Super Admin)</span>`
-          : `<span class="badge badge-primary">🛡️ ผู้ดูแลระบบ (Admin)</span>`;
+        const isProtected = adm.email.toLowerCase() === "winai@psuwit.ac.th";
+        const isSuper = isProtected || adm.role === "super_admin";
+        const roleBadge = isSuper
+          ? `<span class="badge badge-warning font-bold">👑 Super Admin</span>`
+          : `<span class="badge badge-primary">🛡️ Admin</span>`;
 
         const formattedDate = adm.created_at
           ? new Date(adm.created_at).toLocaleDateString("th-TH", { dateStyle: "medium" })
           : "-";
 
-        const actionHtml = isPrimary
-          ? `<span class="text-xs text-slate-400 font-semibold">สิทธิ์ถาวร (ห้ามลบ)</span>`
-          : `<button class="btn btn-sm btn-secondary text-red-500" onclick="AdminController.handleDeleteAdmin('${adm.email}')">🗑️ ลบผู้ดูแล</button>`;
+        const deleteBtn = isProtected
+          ? `<span class="text-xs text-slate-400 font-semibold">สิทธิ์หลักถาวร</span>`
+          : `<button class="btn btn-sm btn-secondary text-red-500" onclick="AdminController.handleDeleteAdmin('${adm.email}')">🗑️ ลบ</button>`;
 
         return `
           <tr>
             <td class="text-center">${idx + 1}</td>
             <td><strong>${adm.name || "-"}</strong></td>
-            <td class="text-xs font-semibold text-indigo-700">${adm.email}</td>
+            <td class="text-xs font-semibold text-indigo-700">${adm.username || adm.email}</td>
             <td class="text-center">${roleBadge}</td>
             <td class="text-center text-xs text-slate-500">${formattedDate}</td>
-            <td class="text-center">${actionHtml}</td>
+            <td class="text-center">
+              <div class="flex items-center justify-center gap-2">
+                <button class="btn btn-sm btn-secondary" onclick="AdminController.handleResetUserPassword('${adm.email}')">🔑 เปลี่ยนรหัสผ่าน</button>
+                ${deleteBtn}
+              </div>
+            </td>
           </tr>
         `;
       })
@@ -485,10 +600,10 @@ const AdminController = {
   async handleAddAdmin() {
     const emailInput = document.getElementById("newAdminEmail").value.trim().toLowerCase();
     const nameInput = document.getElementById("newAdminName").value.trim();
+    const pwdInput = document.getElementById("newAdminPassword")?.value.trim() || "123456";
 
-    const orgRegex = APP_CONFIG.orgEmailRegex || /^[a-zA-Z0-9._%+-]+@psuwit\.ac\.th$/i;
-    if (!orgRegex.test(emailInput)) {
-      alert("⚠️ กรุณากรอกอีเมลองค์กรที่ลงท้ายด้วย @psuwit.ac.th เท่านั้น");
+    if (!emailInput) {
+      alert("⚠️ กรุณากรอก Username / อีเมลของผู้ดูแลระบบ");
       return;
     }
 
@@ -499,12 +614,17 @@ const AdminController = {
 
     await DB.saveAdmin({
       email: emailInput,
+      username: emailInput,
       name: nameInput,
+      password: pwdInput,
       role: emailInput === "winai@psuwit.ac.th" ? "super_admin" : "admin"
     });
 
     document.getElementById("newAdminEmail").value = "";
     document.getElementById("newAdminName").value = "";
+    if (document.getElementById("newAdminPassword")) {
+      document.getElementById("newAdminPassword").value = "123456";
+    }
     await this.refreshData();
     alert(`✅ เพิ่มสิทธิ์ผู้ดูแลระบบให้กับ ${emailInput} เรียบร้อยแล้ว`);
   },
@@ -536,11 +656,6 @@ const AdminController = {
       input.value = DB.getGasUrl();
     }
 
-    const googleInput = document.getElementById("settingsGoogleClientId");
-    if (googleInput) {
-      googleInput.value = DB.getGoogleClientId();
-    }
-
     const dbStatus = await DB.getDatabaseStatus();
     const elEngine = document.getElementById("dbInfoEngine");
     const elFile = document.getElementById("dbInfoFile");
@@ -550,8 +665,8 @@ const AdminController = {
 
     if (elEngine) elEngine.textContent = dbStatus.engine;
     if (elFile) elFile.textContent = dbStatus.file;
-    if (elStudentsCount) elStudentsCount.textContent = `${dbStatus.tables.students} รายการ`;
-    if (elAssessmentsCount) elAssessmentsCount.textContent = `${dbStatus.tables.assessments} รายการ`;
+    if (elStudentsCount) elStudentsCount.textContent = `${dbStatus.tables.students.toLocaleString()} รายการ`;
+    if (elAssessmentsCount) elAssessmentsCount.textContent = `${dbStatus.tables.assessments.toLocaleString()} รายการ`;
     if (elBadge) {
       elBadge.textContent = dbStatus.mode === "server_sqlite"
         ? "SQLite Server Active"
@@ -577,19 +692,12 @@ const AdminController = {
   },
 
   async handleResetSeedDatabase() {
-    if (!confirm("⚠️ คุณต้องการรีเซ็ตฐานข้อมูลทั้งหมดกลับเป็นข้อมูลตัวอย่างเริ่มต้น (Seed Data) ใช่หรือไม่?")) {
+    if (!confirm("⚠️ คุณต้องการรีเซ็ตฐานข้อมูลทั้งหมดกลับเป็นข้อมูลเริ่มต้นจาก user.xlsx (นักเรียน 1,465 คน + ผู้ดูแล 3 คน) ใช่หรือไม่?")) {
       return;
     }
     await DB.resetDatabaseToSeed();
     await this.refreshData();
-    alert("🔄 รีเซ็ตฐานข้อมูลกลับสู่ค่าเริ่มต้นเรียบร้อยแล้ว");
-  },
-
-  async handleSaveGoogleClientId() {
-    const input = document.getElementById("settingsGoogleClientId");
-    const clientId = input ? input.value.trim() : "";
-    await DB.setGoogleClientId(clientId);
-    alert("✅ บันทึก Google OAuth 2.0 Client ID เรียบร้อยแล้ว");
+    alert("🔄 รีเซ็ตฐานข้อมูลกลับสู่ค่าเริ่มต้นจาก user.xlsx เรียบร้อยแล้ว");
   },
 
   async handleTestGasConnection() {
@@ -632,7 +740,7 @@ const AdminController = {
       "รหัสการทดสอบ",
       "รหัสนักเรียน",
       "ชื่อ-นามสกุล",
-      "อีเมล",
+      "Username",
       "ระดับชั้น",
       "ประเภทแบบทดสอบ",
       "คะแนนที่ได้",
@@ -672,7 +780,6 @@ const AdminController = {
       `"${a.submitted_at || ""}"`
     ]);
 
-    // เพิ่ม BOM \uFEFF เพื่อให้ Microsoft Excel อ่านภาษาไทยถูกต้อง
     const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
