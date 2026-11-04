@@ -88,14 +88,28 @@ body {
 }
 
 .brand-logo-badge {
-  background: linear-gradient(135deg, #F59E0B, #D97706);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  height: fit-content;
+  flex-shrink: 0;
+  background: #FFFFFF;
   color: #1E1B4B;
   font-family: var(--font-heading);
   font-weight: 700;
   font-size: 1.1rem;
-  padding: 6px 10px;
+  padding: 4px 6px;
   border-radius: var(--radius-md);
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.brand-logo-badge img {
+  display: block;
+  width: 68px;
+  height: auto;
+  object-fit: contain;
+  border-radius: 6px;
 }
 
 .brand-title {

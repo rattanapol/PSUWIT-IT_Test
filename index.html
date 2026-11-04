@@ -1,16 +1,19 @@
 <!DOCTYPE html>
 <html lang="th">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ระบบทดสอบสมรรถนะเทคโนโลยีสารสนเทศ (IT Competency) - PSU Wittayanusorn</title>
-  
+
   <!-- SEO & Social Meta -->
-  <meta name="description" content="ระบบทดสอบวัดสมรรถนะทาง IT สำหรับนักเรียนมัธยมศึกษาปีที่ 1-6 โรงเรียน ม.อ. วิทยานุสรณ์ พร้อมระบบประเมินผลกราฟใยแมงมุมและเกียรติบัตรอิเล็กทรอนิกส์ PDF">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💻</text></svg>">
+  <meta name="description"
+    content="ระบบทดสอบวัดสมรรถนะทาง IT สำหรับนักเรียนมัธยมศึกษาปีที่ 1-6 โรงเรียน ม.อ. วิทยานุสรณ์ พร้อมระบบประเมินผลกราฟใยแมงมุมและเกียรติบัตรอิเล็กทรอนิกส์ PDF">
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💻</text></svg>">
 
   <!-- Main Stylesheet -->
-  <link rel="stylesheet" href="css/main.css?v=4">
+  <link rel="stylesheet" href="css/main.css?v=5">
 
   <!-- Chart.js CDN for Spider Radar Charts -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -19,14 +22,16 @@
   <!-- Google Identity Services (OAuth 2.0 / Sign in with Google) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
+
 <body>
 
   <!-- Top Application Header -->
   <header class="app-header">
     <div class="header-container">
       <div class="brand-wrapper">
-        <div class="brand-logo-badge" style="padding: 2px; background: #ffffff; overflow: hidden;">
-          <img src="PSUWIT_Logo.jpg" alt="PSU WIT Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
+        <div class="brand-logo-badge" style="display: inline-flex; align-items: center; justify-content: center; padding: 4px 6px; background: #ffffff; border-radius: 10px; width: fit-content; height: fit-content;">
+          <img src="PSUWIT_Logo.jpg" alt="PSU WIT Logo"
+            style="width: 72px; height: auto; display: block; object-fit: contain; border-radius: 6px;">
         </div>
         <div>
           <h1 class="brand-title">IT Competency Assessment</h1>
@@ -43,7 +48,8 @@
         <button id="btnHeaderAdminLink" class="btn btn-sm btn-primary hidden" title="เข้าสู่หน้าผู้ดูแลระบบ">
           🛡️ ผู้ดูแลระบบ
         </button>
-        <button id="btnHeaderChangePassword" class="btn btn-sm btn-secondary" title="เปลี่ยนรหัสผ่านของฉัน" onclick="App.openChangePasswordModal()">
+        <button id="btnHeaderChangePassword" class="btn btn-sm btn-secondary" title="เปลี่ยนรหัสผ่านของฉัน"
+          onclick="App.openChangePasswordModal()">
           🔑 เปลี่ยนรหัสผ่าน
         </button>
         <button class="btn btn-sm btn-secondary btn-logout" title="ออกจากระบบ">
@@ -82,46 +88,34 @@
             <div id="studentLoginContainer">
               <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl mb-4 flex items-center justify-between">
                 <div>
-                  <div class="text-xs font-bold text-indigo-900">🔐 เข้าสู่ระบบสำหรับนักเรียน (Username &amp; Password)</div>
+                  <div class="text-xs font-bold text-indigo-900">🔐 เข้าสู่ระบบสำหรับนักเรียน (Username &amp; Password)
+                  </div>
                   <div class="text-xs text-indigo-700 mt-0.5">ใช้ชื่อผู้ใช้งานและรหัสผ่านที่กำหนดในระบบโรงเรียน</div>
                 </div>
                 <span class="badge badge-primary">Student</span>
               </div>
 
-              <div id="studentAuthErrorBanner" class="hidden p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold"></div>
+              <div id="studentAuthErrorBanner"
+                class="hidden p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold">
+              </div>
 
               <form id="studentCredentialsForm">
                 <div class="form-group">
                   <label class="form-label" for="loginStudentUsername">ชื่อผู้ใช้งาน (Username) *</label>
-                  <input
-                    type="text"
-                    id="loginStudentUsername"
-                    class="form-control"
-                    placeholder="เช่น 6166@psuwit.ac.th หรือรหัสนักเรียน 6166"
-                    autocomplete="username"
-                    required
-                  >
-                  <p class="form-help">สามารถกรอกอีเมลเต็ม เช่น <code>6166@psuwit.ac.th</code> หรือเฉพาะรหัสนักเรียน 4 หลัก เช่น <code>6166</code></p>
+                  <input type="text" id="loginStudentUsername" class="form-control"
+                    placeholder="เช่น 6166@psuwit.ac.th หรือรหัสนักเรียน 6166" autocomplete="username" required>
+                  <p class="form-help">สามารถกรอกอีเมลเต็ม เช่น <code>6166@psuwit.ac.th</code> หรือเฉพาะรหัสนักเรียน 4
+                    หลัก เช่น <code>6166</code></p>
                 </div>
 
                 <div class="form-group">
                   <label class="form-label" for="loginStudentPassword">รหัสผ่าน (Password) *</label>
                   <div class="flex gap-2">
-                    <input
-                      type="password"
-                      id="loginStudentPassword"
-                      class="form-control"
-                      placeholder="กรอกรหัสผ่านของคุณ (ค่าเริ่มต้น 123456)"
-                      autocomplete="current-password"
-                      required
-                    >
-                    <button
-                      type="button"
-                      class="btn btn-secondary btn-sm"
-                      onclick="App.togglePasswordVisibility('loginStudentPassword', this)"
-                      title="แสดง/ซ่อนรหัสผ่าน"
-                      style="white-space: nowrap;"
-                    >
+                    <input type="password" id="loginStudentPassword" class="form-control"
+                      placeholder="กรอกรหัสผ่านของคุณ (ค่าเริ่มต้น 123456)" autocomplete="current-password" required>
+                    <button type="button" class="btn btn-secondary btn-sm"
+                      onclick="App.togglePasswordVisibility('loginStudentPassword', this)" title="แสดง/ซ่อนรหัสผ่าน"
+                      style="white-space: nowrap;">
                       👁️ แสดง
                     </button>
                   </div>
@@ -150,39 +144,25 @@
                 <span class="badge badge-warning">Admin</span>
               </div>
 
-              <div id="adminAuthErrorBanner" class="hidden p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold"></div>
+              <div id="adminAuthErrorBanner"
+                class="hidden p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold">
+              </div>
 
               <form id="adminCredentialsForm">
                 <div class="form-group">
                   <label class="form-label" for="loginAdminUsername">ชื่อผู้ใช้งานผู้ดูแลระบบ (Admin Username) *</label>
-                  <input
-                    type="text"
-                    id="loginAdminUsername"
-                    class="form-control"
-                    placeholder="เช่น winai@psuwit.ac.th, knok@psuwit.ac.th, 00001@psuwit.ac.th"
-                    autocomplete="username"
-                    required
-                  >
+                  <input type="text" id="loginAdminUsername" class="form-control" placeholder="Email ผู้ดูแลระบบ"
+                    autocomplete="username" required>
                 </div>
 
                 <div class="form-group">
                   <label class="form-label" for="loginAdminPassword">รหัสผ่านผู้ดูแลระบบ (Password) *</label>
                   <div class="flex gap-2">
-                    <input
-                      type="password"
-                      id="loginAdminPassword"
-                      class="form-control"
-                      placeholder="กรอกรหัสผ่านผู้ดูแลระบบ"
-                      autocomplete="current-password"
-                      required
-                    >
-                    <button
-                      type="button"
-                      class="btn btn-secondary btn-sm"
-                      onclick="App.togglePasswordVisibility('loginAdminPassword', this)"
-                      title="แสดง/ซ่อนรหัสผ่าน"
-                      style="white-space: nowrap;"
-                    >
+                    <input type="password" id="loginAdminPassword" class="form-control"
+                      placeholder="กรอกรหัสผ่านผู้ดูแลระบบ" autocomplete="current-password" required>
+                    <button type="button" class="btn btn-secondary btn-sm"
+                      onclick="App.togglePasswordVisibility('loginAdminPassword', this)" title="แสดง/ซ่อนรหัสผ่าน"
+                      style="white-space: nowrap;">
                       👁️ แสดง
                     </button>
                   </div>
@@ -211,7 +191,8 @@
     <section id="view-student-portal" class="view-section">
       <div style="max-width: 1000px; margin: 0 auto;">
         <!-- Welcome Card -->
-        <div class="stat-card mb-6" style="background: linear-gradient(135deg, #1E1B4B 0%, #312E81 100%); color: white;">
+        <div class="stat-card mb-6"
+          style="background: linear-gradient(135deg, #1E1B4B 0%, #312E81 100%); color: white;">
           <div class="flex justify-between items-center flex-wrap gap-3">
             <div>
               <span class="badge" style="background: rgba(255,255,255,0.2); color: #FDE68A; margin-bottom: 0.5rem;">
@@ -219,18 +200,15 @@
               </span>
               <h2 class="text-xl font-bold" id="portalStudentName">ชื่อนักเรียน</h2>
               <p class="text-sm text-indigo-200 mt-1">
-                Username: <span id="portalStudentEmail">-</span> | 
-                รหัสนักเรียน: <span id="portalStudentId">-</span> | 
+                Username: <span id="portalStudentEmail">-</span> |
+                รหัสนักเรียน: <span id="portalStudentId">-</span> |
                 ระดับชั้น: <span id="portalStudentGrade" class="font-bold text-amber-300">-</span>
               </p>
             </div>
             <div>
-              <button
-                type="button"
-                class="btn btn-sm"
+              <button type="button" class="btn btn-sm"
                 style="background: rgba(255,255,255,0.16); color: #ffffff; border: 1px solid rgba(255,255,255,0.35);"
-                onclick="App.openChangePasswordModal()"
-              >
+                onclick="App.openChangePasswordModal()">
                 🔑 เปลี่ยนรหัสผ่านของฉัน
               </button>
             </div>
@@ -270,7 +248,8 @@
             <div class="text-xs text-slate-500 mb-4">
               ผลคะแนนล่าสุด: <strong id="portalPostScoreText" class="text-slate-800">ยังไม่มีคะแนน</strong>
             </div>
-            <button id="btnStartPosttest" class="btn btn-primary" style="width: 100%; background: linear-gradient(135deg, #059669, #10B981);">
+            <button id="btnStartPosttest" class="btn btn-primary"
+              style="width: 100%; background: linear-gradient(135deg, #059669, #10B981);">
               🎯 เริ่มทำแบบทดสอบหลังเรียน (Post-test)
             </button>
           </div>
@@ -293,7 +272,8 @@
             <div>
               <h3 class="font-bold text-lg">📚 ประวัติการทดสอบสะสมรายระดับชั้น (ม.1 - ม.3 และ ม.4 - ม.6)</h3>
               <p class="text-xs text-slate-500 mt-0.5">
-                เมื่อเลื่อนระดับชั้น (เช่น จาก ม.1 ไป ม.2) ระบบจะเก็บประวัติผลสอบและเกียรติบัตรของชั้นเดิมไว้ทั้งหมด และเปิดให้ทำแบบทดสอบชุดระดับชั้นใหม่ได้ทันที
+                เมื่อเลื่อนระดับชั้น (เช่น จาก ม.1 ไป ม.2) ระบบจะเก็บประวัติผลสอบและเกียรติบัตรของชั้นเดิมไว้ทั้งหมด
+                และเปิดให้ทำแบบทดสอบชุดระดับชั้นใหม่ได้ทันที
               </p>
             </div>
             <span class="badge badge-primary">Longitudinal Portfolio</span>
@@ -311,7 +291,7 @@
         <!-- Safety Alert Banner (Anti-Cheat Violation Notification) -->
         <div id="examViolationBanner" class="safety-bar hidden">
           <div>
-            ⚠️ ตรวจพบการสลับหน้าต่างหรือแท็บเบราว์เซอร์! 
+            ⚠️ ตรวจพบการสลับหน้าต่างหรือแท็บเบราว์เซอร์!
             (การเตือนครั้งที่: <span id="examViolationCount" class="font-bold">1 / 3</span>)
           </div>
           <div class="text-xs">ห้ามสลับจอ มิฉะนั้นระบบจะส่งข้อสอบทันที</div>
@@ -342,7 +322,8 @@
 
         <!-- Submit Button Bottom -->
         <div class="flex justify-end mt-4">
-          <button id="btnSubmitAssessment" class="btn btn-primary" style="background: linear-gradient(135deg, #059669, #10B981);">
+          <button id="btnSubmitAssessment" class="btn btn-primary"
+            style="background: linear-gradient(135deg, #059669, #10B981);">
             ตรวจทานและส่งคำตอบ 🚀
           </button>
         </div>
@@ -354,15 +335,16 @@
     <!-- ============================================================== -->
     <section id="view-results" class="view-section">
       <div style="max-width: 1040px; margin: 0 auto;">
-        
+
         <!-- Result Summary Banner -->
-        <div class="stat-card mb-6" style="background: linear-gradient(135deg, #0B132B 0%, #1C2541 100%); color: white;">
+        <div class="stat-card mb-6"
+          style="background: linear-gradient(135deg, #0B132B 0%, #1C2541 100%); color: white;">
           <div class="flex justify-between items-center">
             <div>
               <span class="badge badge-success mb-2">บันทึกผลการทดสอบสำเร็จ</span>
               <h2 class="text-2xl font-bold">รายงานผลการประเมินสมรรถนะ IT</h2>
               <p class="text-sm text-slate-300 mt-1">
-                ผู้รับการทดสอบ: <strong id="resStudentName" class="text-white">-</strong> 
+                ผู้รับการทดสอบ: <strong id="resStudentName" class="text-white">-</strong>
                 | ระดับชั้น: <strong id="resStudentGrade" class="text-amber-300">-</strong>
                 | รอบการทดสอบ: <strong id="resTestType" class="text-indigo-300">-</strong>
               </p>
@@ -404,7 +386,8 @@
             <div>
               <span class="badge badge-warning font-bold">🎉 ยินดีด้วย คุณผ่านเกณฑ์การทดสอบ</span>
               <h3 class="text-xl font-bold text-slate-900 mt-1">เกียรติบัตรอิเล็กทรอนิกส์ (E-Certificate)</h3>
-              <p class="text-xs text-slate-500">สามารถดาวน์โหลดเป็นไฟล์ PDF คุณภาพสูง (300 DPI) เพื่อใช้ประกอบแฟ้มสะสมงาน (Portfolio)</p>
+              <p class="text-xs text-slate-500">สามารถดาวน์โหลดเป็นไฟล์ PDF คุณภาพสูง (300 DPI)
+                เพื่อใช้ประกอบแฟ้มสะสมงาน (Portfolio)</p>
             </div>
             <button id="btnDownloadCertificate" class="btn btn-gold">
               📥 ดาวน์โหลดเกียรติบัตร (PDF)
@@ -431,7 +414,7 @@
     <!-- ============================================================== -->
     <section id="view-admin" class="view-section">
       <div class="admin-layout">
-        
+
         <!-- Admin Navigation Tabs -->
         <div class="admin-nav">
           <button class="admin-nav-item active" data-tab="dashboard">📊 Dashboard ภาพรวม</button>
@@ -473,7 +456,8 @@
 
           <!-- Overview Comparison Bar Chart -->
           <div class="chart-container-box">
-            <h3 class="font-bold text-base mb-4">📈 เปรียบเทียบคะแนนเฉลี่ย Pre-test vs Post-test แยกตามระดับชั้น (ม.1 - ม.6)</h3>
+            <h3 class="font-bold text-base mb-4">📈 เปรียบเทียบคะแนนเฉลี่ย Pre-test vs Post-test แยกตามระดับชั้น (ม.1 -
+              ม.6)</h3>
             <div style="height: 320px; position: relative;">
               <canvas id="adminOverviewChartCanvas"></canvas>
             </div>
@@ -498,13 +482,8 @@
               </select>
 
               <!-- Search Box -->
-              <input
-                type="text"
-                id="adminSearchInput"
-                class="form-control"
-                placeholder="🔍 ค้นหาชื่อ, รหัสนักเรียน, อีเมล..."
-                style="width: 250px; padding: 0.4rem 0.8rem;"
-              >
+              <input type="text" id="adminSearchInput" class="form-control"
+                placeholder="🔍 ค้นหาชื่อ, รหัสนักเรียน, อีเมล..." style="width: 250px; padding: 0.4rem 0.8rem;">
             </div>
 
             <!-- Export Button (3.2 Export หรือ Download ในแต่ละระดับชั้นได้) -->
@@ -537,19 +516,27 @@
         <!-- Tab 3: Student Management (3.4 จัดการข้อมูล user ได้) -->
         <div id="adminPane-students" class="admin-tab-pane">
           <!-- การ์ดปรับระดับชั้น/เลื่อนชั้นแบบทั้งระดับชั้น หรือทั้งห้อง (Bulk Grade & Room Update) -->
-          <div id="bulkGradeUpdateCard" class="stat-card mb-4" style="border-left: 4px solid #4F46E5; background: #F8FAFC;">
+          <div id="bulkGradeUpdateCard" class="stat-card mb-4"
+            style="border-left: 4px solid #4F46E5; background: #F8FAFC;">
             <div class="flex justify-between items-start flex-wrap gap-3 mb-3">
               <div>
-                <h4 class="font-bold text-base text-indigo-950">🎓 แก้ไขระดับชั้น/เลื่อนชั้นแบบทั้งระดับชั้น หรือทั้งห้อง (Bulk Grade &amp; Room Update)</h4>
+                <h4 class="font-bold text-base text-indigo-950">🎓 แก้ไขระดับชั้น/เลื่อนชั้นแบบทั้งระดับชั้น
+                  หรือทั้งห้อง (Bulk Grade &amp; Room Update)</h4>
                 <p class="text-xs text-slate-600 mt-0.5">
-                  สามารถเปลี่ยนระดับชั้นให้นักเรียนทั้งระดับชั้น หรือเฉพาะห้องเรียนได้ทันที โดยระบบจะ<strong>เก็บประวัติการสอบของระดับชั้นเดิม (ม.1-ม.3 และ ม.4-ม.6) ไว้ครบถ้วน</strong> และเปิดสิทธิ์ให้ทำข้อสอบชุดระดับชั้นใหม่ได้ทันที
+                  สามารถเปลี่ยนระดับชั้นให้นักเรียนทั้งระดับชั้น หรือเฉพาะห้องเรียนได้ทันที
+                  โดยระบบจะ<strong>เก็บประวัติการสอบของระดับชั้นเดิม (ม.1-ม.3 และ ม.4-ม.6) ไว้ครบถ้วน</strong>
+                  และเปิดสิทธิ์ให้ทำข้อสอบชุดระดับชั้นใหม่ได้ทันที
                 </p>
               </div>
               <div class="flex gap-2 flex-wrap">
-                <button type="button" class="btn btn-sm btn-secondary" onclick="AdminController.handlePromoteAcademicGroup('promote_junior')" title="เลื่อนชั้น ม.2→ม.3 และ ม.1→ม.2 ทั้งหมด">
+                <button type="button" class="btn btn-sm btn-secondary"
+                  onclick="AdminController.handlePromoteAcademicGroup('promote_junior')"
+                  title="เลื่อนชั้น ม.2→ม.3 และ ม.1→ม.2 ทั้งหมด">
                   🚀 เลื่อนชั้น ม.ต้น (ม.1→ม.2, ม.2→ม.3)
                 </button>
-                <button type="button" class="btn btn-sm btn-secondary" onclick="AdminController.handlePromoteAcademicGroup('promote_senior')" title="เลื่อนชั้น ม.5→ม.6 และ ม.4→ม.5 ทั้งหมด">
+                <button type="button" class="btn btn-sm btn-secondary"
+                  onclick="AdminController.handlePromoteAcademicGroup('promote_senior')"
+                  title="เลื่อนชั้น ม.5→ม.6 และ ม.4→ม.5 ทั้งหมด">
                   🚀 เลื่อนชั้น ม.ปลาย (ม.4→ม.5, ม.5→ม.6)
                 </button>
               </div>
@@ -557,7 +544,8 @@
 
             <div class="flex items-end gap-3 flex-wrap pt-2 border-t border-slate-200">
               <div>
-                <label class="text-xs font-semibold text-slate-700 block mb-1" for="bulkSourceGrade">1. เลือกระดับชั้นต้นทาง</label>
+                <label class="text-xs font-semibold text-slate-700 block mb-1" for="bulkSourceGrade">1.
+                  เลือกระดับชั้นต้นทาง</label>
                 <select id="bulkSourceGrade" class="form-control" style="width: auto; padding: 0.38rem 0.75rem;">
                   <option value="ม.1">มัธยมศึกษาปีที่ 1 (ม.1)</option>
                   <option value="ม.2">มัธยมศึกษาปีที่ 2 (ม.2)</option>
@@ -569,7 +557,8 @@
               </div>
 
               <div>
-                <label class="text-xs font-semibold text-slate-700 block mb-1" for="bulkSourceRoom">2. ขอบเขตห้องเรียน</label>
+                <label class="text-xs font-semibold text-slate-700 block mb-1" for="bulkSourceRoom">2.
+                  ขอบเขตห้องเรียน</label>
                 <select id="bulkSourceRoom" class="form-control" style="width: auto; padding: 0.38rem 0.75rem;">
                   <option value="all">ทั้งระดับชั้น (ทุกห้อง)</option>
                   <option value="1">เฉพาะห้อง 1</option>
@@ -586,8 +575,10 @@
               <div class="text-slate-400 font-bold pb-2">➜</div>
 
               <div>
-                <label class="text-xs font-semibold text-indigo-800 block mb-1" for="bulkTargetGrade">3. เปลี่ยนเป็นระดับชั้นใหม่</label>
-                <select id="bulkTargetGrade" class="form-control" style="width: auto; padding: 0.38rem 0.75rem; border-color: #6366F1;">
+                <label class="text-xs font-semibold text-indigo-800 block mb-1" for="bulkTargetGrade">3.
+                  เปลี่ยนเป็นระดับชั้นใหม่</label>
+                <select id="bulkTargetGrade" class="form-control"
+                  style="width: auto; padding: 0.38rem 0.75rem; border-color: #6366F1;">
                   <option value="ม.1">มัธยมศึกษาปีที่ 1 (ม.1)</option>
                   <option value="ม.2" selected>มัธยมศึกษาปีที่ 2 (ม.2)</option>
                   <option value="ม.3">มัธยมศึกษาปีที่ 3 (ม.3)</option>
@@ -598,8 +589,10 @@
               </div>
 
               <div>
-                <label class="text-xs font-semibold text-indigo-800 block mb-1" for="bulkTargetRoom">4. ห้องเรียนใหม่</label>
-                <select id="bulkTargetRoom" class="form-control" style="width: auto; padding: 0.38rem 0.75rem; border-color: #6366F1;">
+                <label class="text-xs font-semibold text-indigo-800 block mb-1" for="bulkTargetRoom">4.
+                  ห้องเรียนใหม่</label>
+                <select id="bulkTargetRoom" class="form-control"
+                  style="width: auto; padding: 0.38rem 0.75rem; border-color: #6366F1;">
                   <option value="keep">คงห้องเรียนเดิม</option>
                   <option value="1">เปลี่ยนเป็นห้อง 1</option>
                   <option value="2">เปลี่ยนเป็นห้อง 2</option>
@@ -613,7 +606,8 @@
               </div>
 
               <div>
-                <button type="button" id="btnApplyBulkGrade" class="btn btn-primary btn-sm" onclick="AdminController.handleBulkGradeUpdate()">
+                <button type="button" id="btnApplyBulkGrade" class="btn btn-primary btn-sm"
+                  onclick="AdminController.handleBulkGradeUpdate()">
                   ✅ ยืนยันปรับระดับชั้น/ห้องเรียน
                 </button>
               </div>
@@ -646,13 +640,8 @@
                 <option value="7">ห้อง 7</option>
                 <option value="8">ห้อง 8</option>
               </select>
-              <input
-                type="text"
-                id="adminStudentSearchInput"
-                class="form-control"
-                placeholder="🔍 ค้นหารหัสนักเรียน, ชื่อ, Username..."
-                style="width: 240px; padding: 0.4rem 0.8rem;"
-              >
+              <input type="text" id="adminStudentSearchInput" class="form-control"
+                placeholder="🔍 ค้นหารหัสนักเรียน, ชื่อ, Username..." style="width: 240px; padding: 0.4rem 0.8rem;">
               <button class="btn btn-primary btn-sm" onclick="AdminController.openAddStudent()">
                 ➕ เพิ่มนักเรียนใหม่
               </button>
@@ -695,36 +684,20 @@
               <form id="adminAddManageForm">
                 <div class="form-group">
                   <label class="form-label" for="newAdminEmail">Username / อีเมลผู้ดูแลระบบ (@psuwit.ac.th) *</label>
-                  <input
-                    type="email"
-                    id="newAdminEmail"
-                    class="form-control"
-                    placeholder="เช่น teacher@psuwit.ac.th"
-                    required
-                  >
+                  <input type="email" id="newAdminEmail" class="form-control" placeholder="เช่น teacher@psuwit.ac.th"
+                    required>
                 </div>
 
                 <div class="form-group">
                   <label class="form-label" for="newAdminName">ชื่อ - นามสกุล ผู้ดูแลระบบ *</label>
-                  <input
-                    type="text"
-                    id="newAdminName"
-                    class="form-control"
-                    placeholder="เช่น อาจารย์สมชาย ใจดี"
-                    required
-                  >
+                  <input type="text" id="newAdminName" class="form-control" placeholder="เช่น อาจารย์สมชาย ใจดี"
+                    required>
                 </div>
 
                 <div class="form-group">
                   <label class="form-label" for="newAdminPassword">รหัสผ่านเริ่มต้น (Password) *</label>
-                  <input
-                    type="text"
-                    id="newAdminPassword"
-                    class="form-control"
-                    value="123456"
-                    placeholder="ค่าเริ่มต้น 123456"
-                    required
-                  >
+                  <input type="text" id="newAdminPassword" class="form-control" value="123456"
+                    placeholder="ค่าเริ่มต้น 123456" required>
                 </div>
 
                 <button type="submit" class="btn btn-primary btn-sm mt-2">
@@ -736,12 +709,14 @@
             <!-- คำอธิบายสิทธิ์ผู้ดูแลระบบ -->
             <div class="stat-card">
               <h3 class="font-bold text-lg mb-2">🛡️ นโยบายความปลอดภัยผู้ดูแลระบบ</h3>
-              <div class="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-2 leading-relaxed">
+              <div
+                class="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-2 leading-relaxed">
                 <div>👑 <strong>ผู้ดูแลระบบเริ่มต้นจาก <code>user.xlsx</code>:</strong></div>
                 <div>• <code>winai@psuwit.ac.th</code> — นายวินัย รัตนพล (Super Admin)</div>
                 <div>• <code>knok@psuwit.ac.th</code> — นางสาวกนก กล่อมขจิต (Admin)</div>
                 <div>• <code>00001@psuwit.ac.th</code> — นายดูแลระบบ เทพสุดสุด (Super Admin)</div>
-                <div>• ผู้ดูแลระบบและนักเรียนทุกคนสามารถเปลี่ยนรหัสผ่านของตนเองได้ผ่านปุ่ม <strong>🔑 เปลี่ยนรหัสผ่าน</strong></div>
+                <div>• ผู้ดูแลระบบและนักเรียนทุกคนสามารถเปลี่ยนรหัสผ่านของตนเองได้ผ่านปุ่ม <strong>🔑
+                    เปลี่ยนรหัสผ่าน</strong></div>
               </div>
             </div>
           </div>
@@ -777,7 +752,8 @@
                 <span id="dbStatusBadge" class="badge badge-success">เชื่อมต่อแล้ว (Active)</span>
               </div>
               <p class="text-xs text-slate-500 mb-4">
-                ระบบจัดเก็บข้อมูลในรูปแบบฐานข้อมูลเชิงสัมพันธ์ (Relational Database: SQLite 3 + IndexedDB) พร้อมข้อมูลผู้ใช้งานจาก <code>user.xlsx</code>
+                ระบบจัดเก็บข้อมูลในรูปแบบฐานข้อมูลเชิงสัมพันธ์ (Relational Database: SQLite 3 + IndexedDB)
+                พร้อมข้อมูลผู้ใช้งานจาก <code>user.xlsx</code>
               </p>
 
               <div class="space-y-2 text-sm bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
@@ -787,7 +763,8 @@
                 </div>
                 <div class="flex justify-between">
                   <span class="text-slate-500">ตำแหน่งจัดเก็บฐานข้อมูล:</span>
-                  <code id="dbInfoFile" class="text-xs bg-white px-2 py-0.5 rounded border">database/psuwit_it.sqlite</code>
+                  <code id="dbInfoFile"
+                    class="text-xs bg-white px-2 py-0.5 rounded border">database/psuwit_it.sqlite</code>
                 </div>
                 <div class="flex justify-between">
                   <span class="text-slate-500">ตาราง <code>students</code> (ผู้เข้าสอบ):</span>
@@ -829,16 +806,22 @@
 
               <div class="space-y-3 text-xs">
                 <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
-                  <div class="font-bold text-indigo-900 mb-1">1. ตาราง <code>students</code> (นักเรียน 1,465 คน จาก user.xlsx)</div>
+                  <div class="font-bold text-indigo-900 mb-1">1. ตาราง <code>students</code> (นักเรียน 1,465 คน จาก
+                    user.xlsx)</div>
                   <div class="text-indigo-800 leading-relaxed">
-                    <code>id (PK)</code>, <code>student_id</code>, <code>class_no</code>, <code>title</code>, <code>first_name</code>, <code>last_name</code>, <code>name</code>, <code>username (UNIQUE)</code>, <code>password</code>, <code>grade</code>, <code>room</code>, <code>status</code>, <code>pretest_completed</code>, <code>posttest_completed</code>
+                    <code>id (PK)</code>, <code>student_id</code>, <code>class_no</code>, <code>title</code>,
+                    <code>first_name</code>, <code>last_name</code>, <code>name</code>, <code>username (UNIQUE)</code>,
+                    <code>password</code>, <code>grade</code>, <code>room</code>, <code>status</code>,
+                    <code>pretest_completed</code>, <code>posttest_completed</code>
                   </div>
                 </div>
 
                 <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                  <div class="font-bold text-emerald-900 mb-1">2. ตาราง <code>assessments</code> &amp; <code>admins</code></div>
+                  <div class="font-bold text-emerald-900 mb-1">2. ตาราง <code>assessments</code> &amp;
+                    <code>admins</code></div>
                   <div class="text-emerald-800 leading-relaxed">
-                    <code>assessments</code> (ผลสอบรายด้าน D1-D6 คะแนนเต็ม 75 คะแนน) และ <code>admins</code> (ผู้ดูแลระบบพร้อมรหัสผ่าน)
+                    <code>assessments</code> (ผลสอบรายด้าน D1-D6 คะแนนเต็ม 75 คะแนน) และ <code>admins</code>
+                    (ผู้ดูแลระบบพร้อมรหัสผ่าน)
                   </div>
                 </div>
               </div>
@@ -855,12 +838,8 @@
 
               <div class="form-group">
                 <label class="form-label" for="settingsGasUrl">External Webhook / Google Apps Script URL</label>
-                <input
-                  type="url"
-                  id="settingsGasUrl"
-                  class="form-control"
-                  placeholder="https://script.google.com/macros/s/AKfycb.../exec"
-                >
+                <input type="url" id="settingsGasUrl" class="form-control"
+                  placeholder="https://script.google.com/macros/s/AKfycb.../exec">
                 <div id="gasStatusFeedback" class="mt-2 text-sm font-semibold"></div>
               </div>
 
@@ -892,7 +871,8 @@
       </div>
 
       <p class="text-xs text-slate-500 mb-4">
-        ผู้ใช้งานทุกคน (นักเรียนและผู้ดูแลระบบ) สามารถเปลี่ยนรหัสผ่านของตนเองได้โดยกรอกรหัสผ่านปัจจุบันและตั้งรหัสผ่านใหม่
+        ผู้ใช้งานทุกคน (นักเรียนและผู้ดูแลระบบ)
+        สามารถเปลี่ยนรหัสผ่านของตนเองได้โดยกรอกรหัสผ่านปัจจุบันและตั้งรหัสผ่านใหม่
       </p>
 
       <div id="changePwdFeedback" class="hidden p-3 mb-4 rounded-xl text-xs font-semibold"></div>
@@ -900,48 +880,26 @@
       <form id="changePasswordForm">
         <div class="form-group">
           <label class="form-label" for="changePwdUsername">ชื่อผู้ใช้งาน (Username) *</label>
-          <input
-            type="text"
-            id="changePwdUsername"
-            class="form-control"
-            placeholder="เช่น 6166@psuwit.ac.th หรือ winai@psuwit.ac.th"
-            required
-          >
+          <input type="text" id="changePwdUsername" class="form-control"
+            placeholder="เช่น 6166@psuwit.ac.th หรือ winai@psuwit.ac.th" required>
         </div>
 
         <div class="form-group">
           <label class="form-label" for="changePwdCurrent">รหัสผ่านปัจจุบัน (Current Password) *</label>
-          <input
-            type="password"
-            id="changePwdCurrent"
-            class="form-control"
-            placeholder="กรอกรหัสผ่านปัจจุบันของคุณ"
-            required
-          >
+          <input type="password" id="changePwdCurrent" class="form-control" placeholder="กรอกรหัสผ่านปัจจุบันของคุณ"
+            required>
         </div>
 
         <div class="form-group">
           <label class="form-label" for="changePwdNew">รหัสผ่านใหม่ (New Password) *</label>
-          <input
-            type="password"
-            id="changePwdNew"
-            class="form-control"
-            placeholder="ตั้งรหัสผ่านใหม่ (อย่างน้อย 4 ตัวอักษร)"
-            minlength="4"
-            required
-          >
+          <input type="password" id="changePwdNew" class="form-control"
+            placeholder="ตั้งรหัสผ่านใหม่ (อย่างน้อย 4 ตัวอักษร)" minlength="4" required>
         </div>
 
         <div class="form-group">
           <label class="form-label" for="changePwdConfirm">ยืนยันรหัสผ่านใหม่ (Confirm New Password) *</label>
-          <input
-            type="password"
-            id="changePwdConfirm"
-            class="form-control"
-            placeholder="กรอกรหัสผ่านใหม่อีกครั้งให้ตรงกัน"
-            minlength="4"
-            required
-          >
+          <input type="password" id="changePwdConfirm" class="form-control"
+            placeholder="กรอกรหัสผ่านใหม่อีกครั้งให้ตรงกัน" minlength="4" required>
         </div>
 
         <div class="flex justify-end gap-2 mt-5">
@@ -963,7 +921,8 @@
     <div class="modal-content">
       <div class="modal-header">
         <h3 id="studentModalTitle" class="text-lg font-bold">ข้อมูลนักเรียน</h3>
-        <button class="modal-close" onclick="document.getElementById('studentModal').classList.remove('active')">&times;</button>
+        <button class="modal-close"
+          onclick="document.getElementById('studentModal').classList.remove('active')">&times;</button>
       </div>
       <form id="studentManageForm">
         <div class="grid grid-cols-2 gap-3">
@@ -978,16 +937,19 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="formStudentName">ชื่อ-นามสกุล</label>
-          <input type="text" id="formStudentName" class="form-control" placeholder="เช่น เด็กชายกรธัช เด่นสันติกุล" required>
+          <input type="text" id="formStudentName" class="form-control" placeholder="เช่น เด็กชายกรธัช เด่นสันติกุล"
+            required>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div class="form-group">
             <label class="form-label" for="formStudentEmail">Username (@psuwit.ac.th)</label>
-            <input type="email" id="formStudentEmail" class="form-control" placeholder="เช่น 6166@psuwit.ac.th" required>
+            <input type="email" id="formStudentEmail" class="form-control" placeholder="เช่น 6166@psuwit.ac.th"
+              required>
           </div>
           <div class="form-group">
             <label class="form-label" for="formStudentPassword">รหัสผ่าน (Password)</label>
-            <input type="text" id="formStudentPassword" class="form-control" placeholder="เช่น 123456" value="123456" required>
+            <input type="text" id="formStudentPassword" class="form-control" placeholder="เช่น 123456" value="123456"
+              required>
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3">
@@ -1015,7 +977,8 @@
           </select>
         </div>
         <div class="flex justify-end gap-2 mt-4">
-          <button type="button" class="btn btn-secondary" onclick="document.getElementById('studentModal').classList.remove('active')">
+          <button type="button" class="btn btn-secondary"
+            onclick="document.getElementById('studentModal').classList.remove('active')">
             ยกเลิก
           </button>
           <button type="submit" class="btn btn-primary">
@@ -1045,4 +1008,5 @@
   <script src="js/app.js?v=4"></script>
 
 </body>
+
 </html>
