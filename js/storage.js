@@ -792,13 +792,43 @@ const DB = {
     return this.getLocalStudentsSync();
   },
 
-  // บันทึก / แก้ไขข้อมูลนักเรียน
+  // บันทึก / แก้ไขข้อมูลนักเรียน (รองรับการเปลี่ยนระดับชั้นโดยยังคงเก็บประวัติการสอบของระดับชั้นเดิมไว้)
   async saveStudent(studentData) {
     const cleanEmail = (studentData.email || studentData.username || "").trim().toLowerCase();
     const students = this.getLocalStudentsSync();
 
     const existingIndex = students.findIndex((s) => (s.email || "").toLowerCase() === cleanEmail);
     const existing = existingIndex >= 0 ? students[existingIndex] : null;
+    const nextGrade = studentData.grade || (existing ? existing.grade : "ม.1");
+    const gradeChanged = Boolean(existing && existing.grade && existing.grade !== nextGrade);
+
+    let preCompleted =
+      studentData.pretest_completed !== undefined
+        ? Boolean(studentData.pretest_completed)
+        : existing
+        ? Boolean(existing.pretest_completed)
+        : false;
+    let postCompleted =
+      studentData.posttest_completed !== undefined
+        ? Boolean(studentData.posttest_completed)
+        : existing
+        ? Boolean(existing.posttest_completed)
+        : false;
+
+    // หากมีการเปลี่ยนระดับชั้น ให้คำนวณสถานะ Pre/Post ของระดับชั้นใหม่จากประวัติการสอบที่มีอยู่ โดยเก็บประวัติระดับชั้นเดิมไว้ครบถ้วน
+    if (gradeChanged && studentData.pretest_completed === undefined && studentData.posttest_completed === undefined) {
+      let allAssessments = [];
+      try {
+        const raw = localStorage.getItem(APP_CONFIG.storageKeys.assessments);
+        allAssessments = raw ? JSON.parse(raw) : [];
+      } catch (e) {}
+      preCompleted = allAssessments.some(
+        (a) => (a.email || "").toLowerCase() === cleanEmail && a.grade === nextGrade && a.test_type === "Pre-test"
+      );
+      postCompleted = allAssessments.some(
+        (a) => (a.email || "").toLowerCase() === cleanEmail && a.grade === nextGrade && a.test_type === "Post-test"
+      );
+    }
 
     const record = {
       student_id: studentData.student_id !== undefined ? studentData.student_id : (existing ? existing.student_id : ""),
@@ -810,12 +840,12 @@ const DB = {
       email: cleanEmail,
       username: cleanEmail,
       password: studentData.password || (existing && existing.password) || "123456",
-      grade: studentData.grade || (existing ? existing.grade : "ม.1"),
+      grade: nextGrade,
       room: studentData.room !== undefined ? studentData.room : (existing ? existing.room : ""),
       role: "student",
       status: studentData.status || (existing ? existing.status : "active"),
-      pretest_completed: studentData.pretest_completed !== undefined ? Boolean(studentData.pretest_completed) : (existing ? Boolean(existing.pretest_completed) : false),
-      posttest_completed: studentData.posttest_completed !== undefined ? Boolean(studentData.posttest_completed) : (existing ? Boolean(existing.posttest_completed) : false),
+      pretest_completed: preCompleted,
+      posttest_completed: postCompleted,
       created_at: (existing && existing.created_at) || studentData.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -853,6 +883,107 @@ const DB = {
     }
 
     return true;
+  },
+
+  // แก้ไขระดับชั้น/ห้องเรียนแบบกลุ่ม (ทั้งระดับชั้น หรือ ทั้งห้อง หรือเลื่อนชั้นปีการศึกษา ม.1->ม.2->ม.3 / ม.4->ม.5->ม.6)
+  // โดยเก็บประวัติการทำแบบทดสอบของทุกระดับชั้นเดิมไว้ทั้งหมด
+  async bulkUpdateStudentsGrade(payload = {}) {
+    const mode = payload.mode || "single_rule";
+
+    if (this.canUseServer()) {
+      try {
+        const res = await fetch("/api/students/bulk-grade", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          this.serverAvailable = true;
+        }
+      } catch (e) {
+        this.serverAvailable = false;
+      }
+    }
+
+    const students = this.getLocalStudentsSync();
+    let allAssessments = [];
+    try {
+      const raw = localStorage.getItem(APP_CONFIG.storageKeys.assessments);
+      allAssessments = raw ? JSON.parse(raw) : [];
+    } catch (e) {}
+
+    let rules = [];
+    if (mode === "promote_junior") {
+      // เลื่อนจากชั้นสูงกว่าก่อน (ม.2 -> ม.3 แล้วจึง ม.1 -> ม.2) เพื่อไม่ให้ซ้อนทับกัน
+      rules = [
+        { sourceGrade: "ม.2", sourceRoom: "all", targetGrade: "ม.3", targetRoom: "keep" },
+        { sourceGrade: "ม.1", sourceRoom: "all", targetGrade: "ม.2", targetRoom: "keep" }
+      ];
+    } else if (mode === "promote_senior") {
+      // เลื่อนจากชั้นสูงกว่าก่อน (ม.5 -> ม.6 แล้วจึง ม.4 -> ม.5)
+      rules = [
+        { sourceGrade: "ม.5", sourceRoom: "all", targetGrade: "ม.6", targetRoom: "keep" },
+        { sourceGrade: "ม.4", sourceRoom: "all", targetGrade: "ม.5", targetRoom: "keep" }
+      ];
+    } else {
+      rules = [
+        {
+          sourceGrade: payload.sourceGrade,
+          sourceRoom: payload.sourceRoom || "all",
+          targetGrade: payload.targetGrade,
+          targetRoom: payload.targetRoom || "keep"
+        }
+      ];
+    }
+
+    const updatedStudents = [];
+    const nowIso = new Date().toISOString();
+
+    for (const student of students) {
+      let matchedRule = null;
+      for (const r of rules) {
+        if (!r.sourceGrade || !r.targetGrade) continue;
+        const gradeMatch = student.grade === r.sourceGrade;
+        const roomMatch = !r.sourceRoom || r.sourceRoom === "all" || String(student.room || "") === String(r.sourceRoom);
+        if (gradeMatch && roomMatch) {
+          matchedRule = r;
+          break;
+        }
+      }
+
+      if (matchedRule) {
+        const nextGrade = matchedRule.targetGrade;
+        const nextRoom =
+          !matchedRule.targetRoom || matchedRule.targetRoom === "keep"
+            ? student.room || ""
+            : String(matchedRule.targetRoom);
+        const cleanEmail = (student.email || student.username || "").toLowerCase();
+
+        const hasPreInTarget = allAssessments.some(
+          (a) => (a.email || "").toLowerCase() === cleanEmail && a.grade === nextGrade && a.test_type === "Pre-test"
+        );
+        const hasPostInTarget = allAssessments.some(
+          (a) => (a.email || "").toLowerCase() === cleanEmail && a.grade === nextGrade && a.test_type === "Post-test"
+        );
+
+        student.grade = nextGrade;
+        student.room = nextRoom;
+        student.pretest_completed = hasPreInTarget;
+        student.posttest_completed = hasPostInTarget;
+        student.updated_at = nowIso;
+        updatedStudents.push(student);
+      }
+    }
+
+    if (updatedStudents.length > 0) {
+      localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(students));
+      IDBEngine.putBulk("students", updatedStudents);
+    }
+
+    return {
+      success: true,
+      updatedCount: updatedStudents.length
+    };
   },
 
   // ลบนักเรียน

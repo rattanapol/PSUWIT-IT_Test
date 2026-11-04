@@ -11,6 +11,7 @@ const AdminController = {
   currentFilterGrade: "all",
   searchKeyword: "",
   studentFilterGrade: "all",
+  studentFilterRoom: "all",
   studentSearchKeyword: "",
   studentPage: 1,
   studentPageSize: 50,
@@ -60,6 +61,16 @@ const AdminController = {
     if (studentGradeFilter) {
       studentGradeFilter.addEventListener("change", (e) => {
         this.studentFilterGrade = e.target.value;
+        this.studentPage = 1;
+        this.renderStudentsTable();
+      });
+    }
+
+    // ตัวกรองห้องเรียนในตารางรายชื่อนักเรียน
+    const studentRoomFilter = document.getElementById("adminStudentRoomFilter");
+    if (studentRoomFilter) {
+      studentRoomFilter.addEventListener("change", (e) => {
+        this.studentFilterRoom = e.target.value;
         this.studentPage = 1;
         this.renderStudentsTable();
       });
@@ -281,7 +292,10 @@ const AdminController = {
     if (!item) return;
 
     const otherTest = this.cachedAssessments.find(
-      (a) => a.email.toLowerCase() === item.email.toLowerCase() && a.test_id !== item.test_id
+      (a) =>
+        (a.email || "").toLowerCase() === (item.email || "").toLowerCase() &&
+        a.grade === item.grade &&
+        a.test_id !== item.test_id
     );
 
     const modal = document.getElementById("assessmentDetailModal");
@@ -327,7 +341,7 @@ const AdminController = {
     }, 100);
   },
 
-  // 3. เรนเดอร์ ตารางจัดการข้อมูลนักเรียน (พร้อมกรอง ค้นหา และแบ่งหน้าสำหรับ 1,465 คน)
+  // 3. เรนเดอร์ ตารางจัดการข้อมูลนักเรียน (พร้อมกรองชั้น/ห้อง ค้นหา ประวัติสะสม ม.1-ม.6 และแบ่งหน้า)
   renderStudentsTable() {
     const tbody = document.getElementById("adminStudentsTableBody");
     const countLabel = document.getElementById("adminStudentsCountLabel");
@@ -338,6 +352,10 @@ const AdminController = {
 
     if (this.studentFilterGrade !== "all") {
       filtered = filtered.filter((s) => s.grade === this.studentFilterGrade);
+    }
+
+    if (this.studentFilterRoom !== "all") {
+      filtered = filtered.filter((s) => String(s.room || "") === String(this.studentFilterRoom));
     }
 
     if (this.studentSearchKeyword) {
@@ -365,11 +383,20 @@ const AdminController = {
     if (pageItems.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="8" class="text-center py-6 text-slate-400">ไม่พบรายชื่อนักเรียนที่ตรงกับเงื่อนไข</td>
+          <td colspan="9" class="text-center py-6 text-slate-400">ไม่พบรายชื่อนักเรียนที่ตรงกับเงื่อนไข</td>
         </tr>
       `;
       if (paginationEl) paginationEl.innerHTML = "";
       return;
+    }
+
+    // สร้าง Map ประวัติการสอบรายอีเมลเพื่อแสดงระดับชั้นที่เคยสอบแล้วทั้งหมด (ม.1-ม.3, ม.4-ม.6)
+    const assessmentsByEmail = new Map();
+    for (const a of this.cachedAssessments) {
+      const em = (a.email || "").toLowerCase();
+      if (!em) continue;
+      if (!assessmentsByEmail.has(em)) assessmentsByEmail.set(em, []);
+      assessmentsByEmail.get(em).push(a);
     }
 
     tbody.innerHTML = pageItems
@@ -380,8 +407,30 @@ const AdminController = {
           ? `<span class="badge badge-fail">ระงับชั่วคราว</span>`
           : `<span class="badge badge-success">พร้อมใช้งาน</span>`;
 
-        const preChecked = student.pretest_completed ? `<span class="text-emerald-500 font-bold">✓ ทำแล้ว</span>` : `<span class="text-slate-400">-</span>`;
-        const postChecked = student.posttest_completed ? `<span class="text-emerald-500 font-bold">✓ ทำแล้ว</span>` : `<span class="text-slate-400">-</span>`;
+        const cleanEmail = (student.email || student.username || "").toLowerCase();
+        const studentHistory = assessmentsByEmail.get(cleanEmail) || [];
+        const currentGradeAssessments = studentHistory.filter((a) => a.grade === student.grade);
+
+        const hasPreCurrent =
+          Boolean(student.pretest_completed) || currentGradeAssessments.some((a) => a.test_type === "Pre-test");
+        const hasPostCurrent =
+          Boolean(student.posttest_completed) || currentGradeAssessments.some((a) => a.test_type === "Post-test");
+
+        const preChecked = hasPreCurrent
+          ? `<span class="text-emerald-600 font-bold">✓ ทำแล้ว</span>`
+          : `<span class="text-slate-400">-</span>`;
+        const postChecked = hasPostCurrent
+          ? `<span class="text-emerald-600 font-bold">✓ ทำแล้ว</span>`
+          : `<span class="text-slate-400">-</span>`;
+
+        const testedGrades = Array.from(new Set(studentHistory.map((a) => a.grade).filter(Boolean))).sort();
+        const historyCell =
+          testedGrades.length > 0
+            ? `<button type="button" class="btn btn-sm btn-secondary" style="padding: 0.2rem 0.55rem; font-size: 0.72rem;" onclick="AdminController.viewStudentMultiGradeHistory('${student.email}')">
+                📚 ${testedGrades.join(", ")} (${studentHistory.length} ครั้ง)
+              </button>`
+            : `<span class="text-xs text-slate-400">ยังไม่มีประวัติ</span>`;
+
         const roomStr = student.room ? `/${student.room}` : "";
         const classNoStr = student.class_no ? ` (#${student.class_no})` : "";
 
@@ -393,12 +442,14 @@ const AdminController = {
             <td class="text-xs font-medium text-indigo-700">${student.username || student.email}</td>
             <td class="text-center"><span class="badge badge-outline">${student.grade}${roomStr}${classNoStr}</span></td>
             <td class="text-center">${preChecked} / ${postChecked}</td>
+            <td class="text-center">${historyCell}</td>
             <td class="text-center">${statusBadge}</td>
             <td class="text-center">
               <div class="flex items-center justify-center gap-1">
-                <button class="btn-icon" title="แก้ไขข้อมูล" onclick="AdminController.openEditStudent('${student.email}')">✏️</button>
+                <button class="btn-icon" title="ดูประวัติการสอบสะสม ม.1-ม.6" onclick="AdminController.viewStudentMultiGradeHistory('${student.email}')">📚</button>
+                <button class="btn-icon" title="แก้ไขข้อมูล/ระดับชั้น" onclick="AdminController.openEditStudent('${student.email}')">✏️</button>
                 <button class="btn-icon" title="ตั้งรหัสผ่านใหม่" onclick="AdminController.handleResetUserPassword('${student.email}')">🔑</button>
-                <button class="btn-icon" title="รีเซ็ตสิทธิ์การสอบ" onclick="AdminController.handleResetAttempts('${student.email}')">🔄</button>
+                <button class="btn-icon" title="รีเซ็ตสิทธิ์การสอบชั้นปัจจุบัน" onclick="AdminController.handleResetAttempts('${student.email}')">🔄</button>
                 <button class="btn-icon" title="สลับสถานะ" onclick="AdminController.toggleStudentStatus('${student.email}')">⚡</button>
                 <button class="btn-icon text-red-500" title="ลบ" onclick="AdminController.handleDeleteStudent('${student.email}')">🗑️</button>
               </div>
@@ -432,6 +483,162 @@ const AdminController = {
         </div>
       `;
     }
+  },
+
+  // แก้ไขระดับชั้น/ห้องเรียนแบบทั้งระดับชั้น หรือทั้งห้อง
+  async handleBulkGradeUpdate() {
+    const sourceGrade = document.getElementById("bulkSourceGrade")?.value || "ม.1";
+    const sourceRoom = document.getElementById("bulkSourceRoom")?.value || "all";
+    const targetGrade = document.getElementById("bulkTargetGrade")?.value || "ม.2";
+    const targetRoom = document.getElementById("bulkTargetRoom")?.value || "keep";
+
+    const matchingStudents = this.cachedStudents.filter((s) => {
+      const gMatch = s.grade === sourceGrade;
+      const rMatch = sourceRoom === "all" || String(s.room || "") === String(sourceRoom);
+      return gMatch && rMatch;
+    });
+
+    if (matchingStudents.length === 0) {
+      alert(`⚠️ ไม่พบนักเรียนในระดับชั้น ${sourceGrade} ${sourceRoom === "all" ? "(ทุกห้อง)" : `ห้อง ${sourceRoom}`}`);
+      return;
+    }
+
+    const scopeText = sourceRoom === "all" ? `ระดับชั้น ${sourceGrade} ทั้งระดับชั้น (ทุกห้อง)` : `ระดับชั้น ${sourceGrade}/${sourceRoom} ทั้งห้อง`;
+    const targetText = targetRoom === "keep" ? `ระดับชั้น ${targetGrade} (คงห้องเรียนเดิม)` : `ระดับชั้น ${targetGrade}/${targetRoom}`;
+
+    if (
+      !confirm(
+        `🎓 ยืนยันการปรับระดับชั้นผู้ใช้งานแบบกลุ่ม\n\n` +
+          `• ต้นทาง: ${scopeText} (จำนวน ${matchingStudents.length.toLocaleString()} คน)\n` +
+          `• เปลี่ยนเป็น: ${targetText}\n\n` +
+          `หมายเหตุ: ประวัติผลสอบและเกียรติบัตรของระดับชั้นเดิม (เช่น ม.1-ม.3 หรือ ม.4-ม.6) จะถูกเก็บรักษาไว้ทั้งหมด และนักเรียนสามารถเข้าทำแบบทดสอบของ ${targetGrade} ต่อได้ทันที`
+      )
+    ) {
+      return;
+    }
+
+    const res = await DB.bulkUpdateStudentsGrade({
+      mode: "single_rule",
+      sourceGrade,
+      sourceRoom,
+      targetGrade,
+      targetRoom
+    });
+
+    await this.refreshData();
+    alert(`✅ ปรับปรุงข้อมูลระดับชั้นสำเร็จจำนวน ${res.updatedCount.toLocaleString()} คน เรียบร้อยแล้ว!`);
+  },
+
+  // เลื่อนชั้นปีการศึกษาอัตโนมัติสำหรับ ม.ต้น (ม.1->ม.2, ม.2->ม.3) หรือ ม.ปลาย (ม.4->ม.5, ม.5->ม.6)
+  async handlePromoteAcademicGroup(mode) {
+    const isJunior = mode === "promote_junior";
+    const desc = isJunior
+      ? "มัธยมศึกษาตอนต้น (เลื่อนชั้น ม.2 ขึ้น ม.3 และ เลื่อนชั้น ม.1 ขึ้น ม.2 ทั้งระดับชั้น)"
+      : "มัธยมศึกษาตอนปลาย (เลื่อนชั้น ม.5 ขึ้น ม.6 และ เลื่อนชั้น ม.4 ขึ้น ม.5 ทั้งระดับชั้น)";
+
+    if (
+      !confirm(
+        `🚀 ยืนยันการเลื่อนชั้นปีการศึกษา: ${desc}\n\n` +
+          `• ระบบจะเลื่อนระดับชั้นให้นักเรียนโดยอัตโนมัติ (คงเลขห้องเดิม)\n` +
+          `• ประวัติการทำแบบทดสอบเดิมทั้งหมด (ม.1-ม.3 และ ม.4-ม.6) จะถูกเก็บสะสมไว้ครบถ้วน\n` +
+          `• นักเรียนที่เลื่อนชั้นแล้วจะสามารถทำแบบทดสอบชุดระดับชั้นใหม่ได้ทันที\n\n` +
+          `ต้องการดำเนินการต่อหรือไม่?`
+      )
+    ) {
+      return;
+    }
+
+    const res = await DB.bulkUpdateStudentsGrade({ mode });
+    await this.refreshData();
+    alert(`🎉 เลื่อนระดับชั้นสำเร็จเรียบร้อยแล้ว จำนวน ${res.updatedCount.toLocaleString()} คน!`);
+  },
+
+  // ดูประวัติการทดสอบสะสมรายบุคคลตั้งแต่ ม.1 - ม.3 และ ม.4 - ม.6
+  viewStudentMultiGradeHistory(email) {
+    const cleanEmail = (email || "").trim().toLowerCase();
+    const student = this.cachedStudents.find((s) => (s.email || s.username || "").toLowerCase() === cleanEmail);
+    if (!student) return;
+
+    const history = this.cachedAssessments.filter((a) => (a.email || "").toLowerCase() === cleanEmail);
+    const modal = document.getElementById("assessmentDetailModal");
+    const container = document.getElementById("assessmentDetailModalContent");
+    if (!modal || !container) return;
+
+    const allGrades = ["ม.1", "ม.2", "ม.3", "ม.4", "ม.5", "ม.6"];
+    const rowsHtml = allGrades
+      .map((g) => {
+        const isCurrent = student.grade === g;
+        const gItems = history.filter((h) => h.grade === g);
+        const pre = gItems.find((h) => h.test_type === "Pre-test");
+        const post = gItems.find((h) => h.test_type === "Post-test");
+
+        const preText = pre
+          ? `<span class="font-bold text-indigo-700">${pre.score_total}/${pre.max_score} (${pre.score_percent}%)</span>`
+          : `<span class="text-slate-400">-</span>`;
+        const postText = post
+          ? `<span class="font-bold ${post.passed ? "text-emerald-600" : "text-amber-600"}">${post.score_total}/${post.max_score} (${post.score_percent}%)</span>`
+          : `<span class="text-slate-400">-</span>`;
+
+        const targetTest = post || pre;
+        const actionBtn = targetTest
+          ? `<button type="button" class="btn btn-sm btn-outline" onclick="AdminController.viewAssessmentDetail('${targetTest.test_id}')">
+              🔍 ดูกราฟ/เกียรติบัตร (${g})
+            </button>`
+          : `<span class="text-xs text-slate-400">ยังไม่มีผลสอบ</span>`;
+
+        return `
+          <tr style="${isCurrent ? "background: #EEF2FF;" : ""}">
+            <td class="font-bold text-center">
+              ${g} ${isCurrent ? `<span class="badge badge-primary" style="font-size: 0.65rem;">ปัจจุบัน</span>` : ""}
+            </td>
+            <td class="text-center">${preText}</td>
+            <td class="text-center">${postText}</td>
+            <td class="text-center">${gItems.length} ครั้ง</td>
+            <td class="text-center">${actionBtn}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    container.innerHTML = `
+      <div class="modal-header">
+        <h3 class="text-lg font-bold">📚 ประวัติการทดสอบสะสม (ม.1 - ม.3 และ ม.4 - ม.6)</h3>
+        <button class="modal-close" onclick="document.getElementById('assessmentDetailModal').classList.remove('active')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="grid grid-cols-2 gap-3 mb-4 bg-slate-50 p-3.5 rounded-xl text-sm">
+          <div><strong>ชื่อ-สกุล:</strong> ${student.name}</div>
+          <div><strong>รหัสนักเรียน:</strong> ${student.student_id || "-"}</div>
+          <div><strong>Username:</strong> ${student.username || student.email}</div>
+          <div><strong>ระดับชั้นปัจจุบัน:</strong> <span class="badge badge-primary">${student.grade}${student.room ? "/" + student.room : ""}</span></div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="app-table">
+            <thead>
+              <tr>
+                <th class="text-center">ระดับชั้น</th>
+                <th class="text-center">คะแนน Pre-test</th>
+                <th class="text-center">คะแนน Post-test</th>
+                <th class="text-center">จำนวนครั้ง</th>
+                <th class="text-center">ดูผลละเอียด / เกียรติบัตร</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-4 flex justify-end">
+          <button class="btn btn-secondary" onclick="document.getElementById('assessmentDetailModal').classList.remove('active')">
+            ปิดหน้าต่าง
+          </button>
+        </div>
+      </div>
+    `;
+
+    modal.classList.add("active");
   },
 
   goToStudentPage(page) {

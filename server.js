@@ -521,6 +521,67 @@ class DatabaseManager {
     return true;
   }
 
+  // เลื่อนชั้นหรือแก้ไขระดับชั้น/ห้องเรียนแบบกลุ่ม (ทั้งระดับชั้น หรือ ทั้งห้องเรียน) โดยยังคงประวัติผลสอบชั้นปีเดิมไว้ครบถ้วน
+  bulkUpdateGrade(payload) {
+    const mode = payload.mode || 'single_rule';
+    const now = new Date().toISOString();
+    let updatedCount = 0;
+
+    const applyRule = (srcGrade, srcRoom, dstGrade, dstRoom) => {
+      let query = 'SELECT * FROM students WHERE grade = ?';
+      const params = [srcGrade];
+      if (srcRoom && srcRoom !== 'all') {
+        query += ' AND room = ?';
+        params.push(String(srcRoom));
+      }
+      const targets = this.db.prepare(query).all(...params);
+      const updateStmt = this.db.prepare(`
+        UPDATE students
+        SET grade = ?, room = ?, pretest_completed = ?, posttest_completed = ?, updated_at = ?
+        WHERE id = ?
+      `);
+      const checkAssessStmt = this.db.prepare(`
+        SELECT test_type FROM assessments WHERE LOWER(email) = ? AND grade = ?
+      `);
+
+      for (const st of targets) {
+        const nextRoom = (!dstRoom || dstRoom === 'keep') ? (st.room || '') : String(dstRoom);
+        const existingTests = checkAssessStmt.all((st.email || '').toLowerCase(), dstGrade);
+        const hasPre = existingTests.some(t => t.test_type === 'Pre-test') ? 1 : 0;
+        const hasPost = existingTests.some(t => t.test_type === 'Post-test') ? 1 : 0;
+        updateStmt.run(dstGrade, nextRoom, hasPre, hasPost, now, st.id);
+        updatedCount++;
+      }
+    };
+
+    this.db.exec('BEGIN TRANSACTION');
+    try {
+      if (mode === 'promote_junior') {
+        // เลื่อนชั้น ม.ต้น (ม.2 -> ม.3 ก่อน แล้วตามด้วย ม.1 -> ม.2)
+        applyRule('ม.2', 'all', 'ม.3', 'keep');
+        applyRule('ม.1', 'all', 'ม.2', 'keep');
+      } else if (mode === 'promote_senior') {
+        // เลื่อนชั้น ม.ปลาย (ม.5 -> ม.6 ก่อน แล้วตามด้วย ม.4 -> ม.5)
+        applyRule('ม.5', 'all', 'ม.6', 'keep');
+        applyRule('ม.4', 'all', 'ม.5', 'keep');
+      } else {
+        // แก้ไขตามระดับชั้น หรือ ตามห้องเรียนที่ระบุ
+        applyRule(
+          payload.sourceGrade,
+          payload.sourceRoom || 'all',
+          payload.targetGrade,
+          payload.targetRoom || 'keep'
+        );
+      }
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+
+    return { updatedCount };
+  }
+
   getAssessments(gradeFilter = 'all', emailFilter = '') {
     let query = 'SELECT * FROM assessments WHERE 1=1';
     const params = [];
@@ -789,6 +850,12 @@ const server = http.createServer(async (req, res) => {
         const body = await parseBody(req);
         dbManager.resetAttempts(body.email);
         return sendJson(res, 200, { status: 'success', message: 'Reset attempts' });
+      }
+
+      if (pathname === '/api/students/bulk-grade' && req.method === 'POST') {
+        const body = await parseBody(req);
+        const result = dbManager.bulkUpdateGrade(body);
+        return sendJson(res, 200, { status: 'success', data: result });
       }
 
       if (pathname === '/api/assessments' && req.method === 'GET') {

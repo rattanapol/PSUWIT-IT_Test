@@ -10,7 +10,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💻</text></svg>">
 
   <!-- Main Stylesheet -->
-  <link rel="stylesheet" href="css/main.css?v=3">
+  <link rel="stylesheet" href="css/main.css?v=4">
 
   <!-- Chart.js CDN for Spider Radar Charts -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -25,7 +25,9 @@
   <header class="app-header">
     <div class="header-container">
       <div class="brand-wrapper">
-        <div class="brand-logo-badge">PSU WIT</div>
+        <div class="brand-logo-badge" style="padding: 2px; background: #ffffff; overflow: hidden;">
+          <img src="PSUWIT_Logo.jpg" alt="PSU WIT Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
+        </div>
         <div>
           <h1 class="brand-title">IT Competency Assessment</h1>
           <p class="brand-subtitle">ระบบทดสอบสมรรถนะเทคโนโลยีสารสนเทศ มัธยมศึกษา (ม.1 - ม.6)</p>
@@ -274,15 +276,29 @@
           </div>
         </div>
 
-        <!-- Section: Past History & Comparative Spider Radar -->
-        <div id="portalHistorySection" class="stat-card hidden">
+        <!-- Section: Past History & Comparative Spider Radar (Current Grade) -->
+        <div id="portalHistorySection" class="stat-card hidden mb-6">
           <div class="flex justify-between items-center mb-4">
             <h3 class="font-bold text-lg">📊 กราฟใยแมงมุมสมรรถนะของคุณ (IT Competency Radar)</h3>
-            <span class="text-xs text-slate-400">เปรียบเทียบ Pre-test vs Post-test</span>
+            <span class="text-xs text-slate-400">เปรียบเทียบ Pre-test vs Post-test ของระดับชั้นปัจจุบัน</span>
           </div>
           <div style="height: 380px; position: relative;">
             <canvas id="portalRadarChartCanvas"></canvas>
           </div>
+        </div>
+
+        <!-- Section: Longitudinal Multi-Grade History (ม.1 - ม.3 และ ม.4 - ม.6) -->
+        <div id="portalMultiGradeHistorySection" class="stat-card mb-6">
+          <div class="flex justify-between items-center mb-2 flex-wrap gap-2">
+            <div>
+              <h3 class="font-bold text-lg">📚 ประวัติการทดสอบสะสมรายระดับชั้น (ม.1 - ม.3 และ ม.4 - ม.6)</h3>
+              <p class="text-xs text-slate-500 mt-0.5">
+                เมื่อเลื่อนระดับชั้น (เช่น จาก ม.1 ไป ม.2) ระบบจะเก็บประวัติผลสอบและเกียรติบัตรของชั้นเดิมไว้ทั้งหมด และเปิดให้ทำแบบทดสอบชุดระดับชั้นใหม่ได้ทันที
+              </p>
+            </div>
+            <span class="badge badge-primary">Longitudinal Portfolio</span>
+          </div>
+          <div id="portalMultiGradeHistoryContent" class="mt-4"></div>
         </div>
       </div>
     </section>
@@ -520,6 +536,90 @@
 
         <!-- Tab 3: Student Management (3.4 จัดการข้อมูล user ได้) -->
         <div id="adminPane-students" class="admin-tab-pane">
+          <!-- การ์ดปรับระดับชั้น/เลื่อนชั้นแบบทั้งระดับชั้น หรือทั้งห้อง (Bulk Grade & Room Update) -->
+          <div id="bulkGradeUpdateCard" class="stat-card mb-4" style="border-left: 4px solid #4F46E5; background: #F8FAFC;">
+            <div class="flex justify-between items-start flex-wrap gap-3 mb-3">
+              <div>
+                <h4 class="font-bold text-base text-indigo-950">🎓 แก้ไขระดับชั้น/เลื่อนชั้นแบบทั้งระดับชั้น หรือทั้งห้อง (Bulk Grade &amp; Room Update)</h4>
+                <p class="text-xs text-slate-600 mt-0.5">
+                  สามารถเปลี่ยนระดับชั้นให้นักเรียนทั้งระดับชั้น หรือเฉพาะห้องเรียนได้ทันที โดยระบบจะ<strong>เก็บประวัติการสอบของระดับชั้นเดิม (ม.1-ม.3 และ ม.4-ม.6) ไว้ครบถ้วน</strong> และเปิดสิทธิ์ให้ทำข้อสอบชุดระดับชั้นใหม่ได้ทันที
+                </p>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button type="button" class="btn btn-sm btn-secondary" onclick="AdminController.handlePromoteAcademicGroup('promote_junior')" title="เลื่อนชั้น ม.2→ม.3 และ ม.1→ม.2 ทั้งหมด">
+                  🚀 เลื่อนชั้น ม.ต้น (ม.1→ม.2, ม.2→ม.3)
+                </button>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="AdminController.handlePromoteAcademicGroup('promote_senior')" title="เลื่อนชั้น ม.5→ม.6 และ ม.4→ม.5 ทั้งหมด">
+                  🚀 เลื่อนชั้น ม.ปลาย (ม.4→ม.5, ม.5→ม.6)
+                </button>
+              </div>
+            </div>
+
+            <div class="flex items-end gap-3 flex-wrap pt-2 border-t border-slate-200">
+              <div>
+                <label class="text-xs font-semibold text-slate-700 block mb-1" for="bulkSourceGrade">1. เลือกระดับชั้นต้นทาง</label>
+                <select id="bulkSourceGrade" class="form-control" style="width: auto; padding: 0.38rem 0.75rem;">
+                  <option value="ม.1">มัธยมศึกษาปีที่ 1 (ม.1)</option>
+                  <option value="ม.2">มัธยมศึกษาปีที่ 2 (ม.2)</option>
+                  <option value="ม.3">มัธยมศึกษาปีที่ 3 (ม.3)</option>
+                  <option value="ม.4">มัธยมศึกษาปีที่ 4 (ม.4)</option>
+                  <option value="ม.5">มัธยมศึกษาปีที่ 5 (ม.5)</option>
+                  <option value="ม.6">มัธยมศึกษาปีที่ 6 (ม.6)</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="text-xs font-semibold text-slate-700 block mb-1" for="bulkSourceRoom">2. ขอบเขตห้องเรียน</label>
+                <select id="bulkSourceRoom" class="form-control" style="width: auto; padding: 0.38rem 0.75rem;">
+                  <option value="all">ทั้งระดับชั้น (ทุกห้อง)</option>
+                  <option value="1">เฉพาะห้อง 1</option>
+                  <option value="2">เฉพาะห้อง 2</option>
+                  <option value="3">เฉพาะห้อง 3</option>
+                  <option value="4">เฉพาะห้อง 4</option>
+                  <option value="5">เฉพาะห้อง 5</option>
+                  <option value="6">เฉพาะห้อง 6</option>
+                  <option value="7">เฉพาะห้อง 7</option>
+                  <option value="8">เฉพาะห้อง 8</option>
+                </select>
+              </div>
+
+              <div class="text-slate-400 font-bold pb-2">➜</div>
+
+              <div>
+                <label class="text-xs font-semibold text-indigo-800 block mb-1" for="bulkTargetGrade">3. เปลี่ยนเป็นระดับชั้นใหม่</label>
+                <select id="bulkTargetGrade" class="form-control" style="width: auto; padding: 0.38rem 0.75rem; border-color: #6366F1;">
+                  <option value="ม.1">มัธยมศึกษาปีที่ 1 (ม.1)</option>
+                  <option value="ม.2" selected>มัธยมศึกษาปีที่ 2 (ม.2)</option>
+                  <option value="ม.3">มัธยมศึกษาปีที่ 3 (ม.3)</option>
+                  <option value="ม.4">มัธยมศึกษาปีที่ 4 (ม.4)</option>
+                  <option value="ม.5">มัธยมศึกษาปีที่ 5 (ม.5)</option>
+                  <option value="ม.6">มัธยมศึกษาปีที่ 6 (ม.6)</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="text-xs font-semibold text-indigo-800 block mb-1" for="bulkTargetRoom">4. ห้องเรียนใหม่</label>
+                <select id="bulkTargetRoom" class="form-control" style="width: auto; padding: 0.38rem 0.75rem; border-color: #6366F1;">
+                  <option value="keep">คงห้องเรียนเดิม</option>
+                  <option value="1">เปลี่ยนเป็นห้อง 1</option>
+                  <option value="2">เปลี่ยนเป็นห้อง 2</option>
+                  <option value="3">เปลี่ยนเป็นห้อง 3</option>
+                  <option value="4">เปลี่ยนเป็นห้อง 4</option>
+                  <option value="5">เปลี่ยนเป็นห้อง 5</option>
+                  <option value="6">เปลี่ยนเป็นห้อง 6</option>
+                  <option value="7">เปลี่ยนเป็นห้อง 7</option>
+                  <option value="8">เปลี่ยนเป็นห้อง 8</option>
+                </select>
+              </div>
+
+              <div>
+                <button type="button" id="btnApplyBulkGrade" class="btn btn-primary btn-sm" onclick="AdminController.handleBulkGradeUpdate()">
+                  ✅ ยืนยันปรับระดับชั้น/ห้องเรียน
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
             <div>
               <h3 class="font-bold text-lg">รายชื่อผู้ใช้งานและนักเรียนในระบบ (จากฐานข้อมูล user.xlsx)</h3>
@@ -534,6 +634,17 @@
                 <option value="ม.4">ม.4</option>
                 <option value="ม.5">ม.5</option>
                 <option value="ม.6">ม.6</option>
+              </select>
+              <select id="adminStudentRoomFilter" class="form-control" style="width: auto; padding: 0.4rem 0.8rem;">
+                <option value="all">ทุกห้องเรียน</option>
+                <option value="1">ห้อง 1</option>
+                <option value="2">ห้อง 2</option>
+                <option value="3">ห้อง 3</option>
+                <option value="4">ห้อง 4</option>
+                <option value="5">ห้อง 5</option>
+                <option value="6">ห้อง 6</option>
+                <option value="7">ห้อง 7</option>
+                <option value="8">ห้อง 8</option>
               </select>
               <input
                 type="text"
@@ -557,7 +668,8 @@
                   <th>ชื่อ-นามสกุล</th>
                   <th>Username</th>
                   <th class="text-center">ชั้น / ห้อง (เลขที่)</th>
-                  <th class="text-center">Pre / Post Test</th>
+                  <th class="text-center">Pre / Post (ชั้นปัจจุบัน)</th>
+                  <th class="text-center">ประวัติสะสม (ม.1-6)</th>
                   <th class="text-center">สถานะ</th>
                   <th class="text-center">จัดการ</th>
                 </tr>
@@ -922,15 +1034,15 @@
   </div>
 
   <!-- Application Scripts in Order -->
-  <script src="js/config.js?v=3"></script>
-  <script src="js/questions.js?v=3"></script>
-  <script src="js/users_data.js?v=3"></script>
-  <script src="js/storage.js?v=3"></script>
-  <script src="js/charts.js?v=3"></script>
-  <script src="js/certificate.js?v=3"></script>
-  <script src="js/assessment.js?v=3"></script>
-  <script src="js/admin.js?v=3"></script>
-  <script src="js/app.js?v=3"></script>
+  <script src="js/config.js?v=4"></script>
+  <script src="js/questions.js?v=4"></script>
+  <script src="js/users_data.js?v=4"></script>
+  <script src="js/storage.js?v=4"></script>
+  <script src="js/charts.js?v=4"></script>
+  <script src="js/certificate.js?v=4"></script>
+  <script src="js/assessment.js?v=4"></script>
+  <script src="js/admin.js?v=4"></script>
+  <script src="js/app.js?v=4"></script>
 
 </body>
 </html>

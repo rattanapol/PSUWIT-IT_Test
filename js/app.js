@@ -364,31 +364,56 @@ const App = {
     this.switchView("view-auth");
   },
 
-  // เรนเดอร์หน้าพอร์ทัลของนักเรียน
+  // เรนเดอร์หน้าพอร์ทัลของนักเรียน (รองรับการเก็บประวัติสะสม ม.1-ม.3 และ ม.4-ม.6)
   async renderStudentPortal() {
     if (!this.currentUser) return;
+
+    // ซิงก์ระดับชั้นและห้องเรียนล่าสุดจากฐานข้อมูล (กรณีผู้ดูแลระบบเลื่อนชั้นให้ เช่น ม.1 -> ม.2)
+    try {
+      const allStudents = await DB.getStudents();
+      const targetEmail = (this.currentUser.email || this.currentUser.username || "").toLowerCase();
+      const latestStudent = allStudents.find((s) => (s.email || s.username || "").toLowerCase() === targetEmail);
+      if (latestStudent) {
+        this.currentUser.grade = latestStudent.grade || this.currentUser.grade;
+        this.currentUser.room = latestStudent.room !== undefined ? latestStudent.room : this.currentUser.room;
+        this.currentUser.class_no = latestStudent.class_no !== undefined ? latestStudent.class_no : this.currentUser.class_no;
+        this.currentUser.name = latestStudent.name || this.currentUser.name;
+        localStorage.setItem(APP_CONFIG.storageKeys.currentUser, JSON.stringify(this.currentUser));
+        const roomLabel = this.currentUser.room && this.currentUser.room !== "-" ? `/${this.currentUser.room}` : "";
+        const roleEl = document.getElementById("headerUserRole");
+        if (roleEl && this.currentUser.role !== "admin") {
+          roleEl.textContent = `${this.currentUser.grade || ""}${roomLabel} (${this.currentUser.student_id || ""})`;
+        }
+      }
+    } catch (e) {}
+
+    const activeGrade = this.currentUser.grade || "ม.1";
 
     document.getElementById("portalStudentName").textContent = this.currentUser.name;
     document.getElementById("portalStudentEmail").textContent = this.currentUser.username || this.currentUser.email;
     const roomPart = this.currentUser.room ? `/${this.currentUser.room}` : "";
     const noPart = this.currentUser.class_no ? ` (เลขที่ ${this.currentUser.class_no})` : "";
-    document.getElementById("portalStudentGrade").textContent = `${this.currentUser.grade}${roomPart}${noPart}`;
+    document.getElementById("portalStudentGrade").textContent = `${activeGrade}${roomPart}${noPart}`;
     document.getElementById("portalStudentId").textContent = this.currentUser.student_id || "-";
 
-    // ดึงประวัติการสอบของนักเรียน
+    // ดึงประวัติการสอบทั้งหมดของนักเรียน (ทุกชั้นปีที่เคยสอบ)
     const history = await DB.getStudentHistory(this.currentUser.email || this.currentUser.username);
-    const preTest = history.find((h) => h.test_type === "Pre-test");
-    const postTest = history.find((h) => h.test_type === "Post-test");
+    this._cachedStudentHistory = history;
 
-    // อัปเดตการ์ดสถานะ Pre-test
+    // กรองเฉพาะผลสอบของระดับชั้นปัจจุบัน (เช่น เมื่อเลื่อนขึ้น ม.2 จะได้ทำข้อสอบชุด ม.2 ได้โดยประวัติ ม.1 ยังอยู่ครบ)
+    const currentGradeHistory = history.filter((h) => h.grade === activeGrade);
+    const preTest = currentGradeHistory.find((h) => h.test_type === "Pre-test");
+    const postTest = currentGradeHistory.find((h) => h.test_type === "Post-test");
+
+    // อัปเดตการ์ดสถานะ Pre-test (ของระดับชั้นปัจจุบัน)
     const preStatusBadge = document.getElementById("portalPreStatusBadge");
     const preScoreText = document.getElementById("portalPreScoreText");
     const btnStartPre = document.getElementById("btnStartPretest");
 
     if (preTest) {
-      preStatusBadge.innerHTML = `<span class="badge badge-success">ทำเสร็จแล้ว</span>`;
+      preStatusBadge.innerHTML = `<span class="badge badge-success">ทำเสร็จแล้ว (${activeGrade})</span>`;
       preScoreText.textContent = `${preTest.score_total}/${preTest.max_score} (${preTest.score_percent}%)`;
-      btnStartPre.textContent = "🔍 ดูผลคะแนน Pre-test";
+      btnStartPre.textContent = `🔍 ดูผลคะแนน Pre-test (${activeGrade})`;
       btnStartPre.onclick = () => this.showPastResult(preTest, postTest);
 
       let retakePreBtn = document.getElementById("btnRetakePretest");
@@ -397,28 +422,30 @@ const App = {
         retakePreBtn.id = "btnRetakePretest";
         retakePreBtn.className = "btn btn-secondary btn-sm mt-2";
         retakePreBtn.style.width = "100%";
-        retakePreBtn.textContent = "🔄 ทำแบบทดสอบ Pre-test อีกครั้ง";
+        retakePreBtn.textContent = `🔄 ทำแบบทดสอบ Pre-test (${activeGrade}) อีกครั้ง`;
         retakePreBtn.onclick = () => this.startAssessment("Pre-test");
         btnStartPre.parentNode.appendChild(retakePreBtn);
+      } else {
+        retakePreBtn.textContent = `🔄 ทำแบบทดสอบ Pre-test (${activeGrade}) อีกครั้ง`;
       }
     } else {
-      preStatusBadge.innerHTML = `<span class="badge badge-warning">ยังไม่ได้ทำ</span>`;
-      preScoreText.textContent = "ยังไม่มีคะแนน";
-      btnStartPre.textContent = "🚀 เริ่มทำแบบทดสอบก่อนเรียน (Pre-test)";
+      preStatusBadge.innerHTML = `<span class="badge badge-warning">ยังไม่ได้ทำ (${activeGrade})</span>`;
+      preScoreText.textContent = `ยังไม่มีคะแนนในระดับชั้น ${activeGrade}`;
+      btnStartPre.textContent = `🚀 เริ่มทำแบบทดสอบก่อนเรียน Pre-test (${activeGrade})`;
       btnStartPre.onclick = () => this.startAssessment("Pre-test");
       const retakePreBtn = document.getElementById("btnRetakePretest");
       if (retakePreBtn) retakePreBtn.remove();
     }
 
-    // อัปเดตการ์ดสถานะ Post-test
+    // อัปเดตการ์ดสถานะ Post-test (ของระดับชั้นปัจจุบัน)
     const postStatusBadge = document.getElementById("portalPostStatusBadge");
     const postScoreText = document.getElementById("portalPostScoreText");
     const btnStartPost = document.getElementById("btnStartPosttest");
 
     if (postTest) {
-      postStatusBadge.innerHTML = `<span class="badge badge-success">ทำเสร็จแล้ว</span>`;
+      postStatusBadge.innerHTML = `<span class="badge badge-success">ทำเสร็จแล้ว (${activeGrade})</span>`;
       postScoreText.textContent = `${postTest.score_total}/${postTest.max_score} (${postTest.score_percent}%)`;
-      btnStartPost.textContent = "🔍 ดูผลและดาวน์โหลดเกียรติบัตร";
+      btnStartPost.textContent = `🔍 ดูผลและดาวน์โหลดเกียรติบัตร (${activeGrade})`;
       btnStartPost.onclick = () => this.showPastResult(postTest, preTest);
 
       let retakePostBtn = document.getElementById("btnRetakePosttest");
@@ -427,20 +454,22 @@ const App = {
         retakePostBtn.id = "btnRetakePosttest";
         retakePostBtn.className = "btn btn-secondary btn-sm mt-2";
         retakePostBtn.style.width = "100%";
-        retakePostBtn.textContent = "🔄 ทำแบบทดสอบ Post-test อีกครั้ง";
+        retakePostBtn.textContent = `🔄 ทำแบบทดสอบ Post-test (${activeGrade}) อีกครั้ง`;
         retakePostBtn.onclick = () => this.startAssessment("Post-test");
         btnStartPost.parentNode.appendChild(retakePostBtn);
+      } else {
+        retakePostBtn.textContent = `🔄 ทำแบบทดสอบ Post-test (${activeGrade}) อีกครั้ง`;
       }
     } else {
-      postStatusBadge.innerHTML = `<span class="badge badge-secondary">รอทำหลังเรียน</span>`;
-      postScoreText.textContent = "ยังไม่มีคะแนน";
-      btnStartPost.textContent = "🎯 เริ่มทำแบบทดสอบหลังเรียน (Post-test)";
+      postStatusBadge.innerHTML = `<span class="badge badge-secondary">รอทำหลังเรียน (${activeGrade})</span>`;
+      postScoreText.textContent = `ยังไม่มีคะแนนในระดับชั้น ${activeGrade}`;
+      btnStartPost.textContent = `🎯 เริ่มทำแบบทดสอบหลังเรียน Post-test (${activeGrade})`;
       btnStartPost.onclick = () => this.startAssessment("Post-test");
       const retakePostBtn = document.getElementById("btnRetakePosttest");
       if (retakePostBtn) retakePostBtn.remove();
     }
 
-    // แสดงกราฟเปรียบเทียบในหน้าพอร์ทัล หากเคยสอบแล้ว
+    // แสดงกราฟเปรียบเทียบของระดับชั้นปัจจุบันในหน้าพอร์ทัล หากเคยสอบแล้ว
     const historyContainer = document.getElementById("portalHistorySection");
     if (preTest || postTest) {
       historyContainer.classList.remove("hidden");
@@ -449,6 +478,133 @@ const App = {
       }, 100);
     } else {
       historyContainer.classList.add("hidden");
+    }
+
+    // เรนเดอร์ตาราง/การ์ดประวัติการทดสอบสะสมรายระดับชั้น (ม.1 - ม.3 และ ม.4 - ม.6)
+    this.renderMultiGradeHistory(history, activeGrade);
+  },
+
+  // แสดงประวัติการทดสอบสะสมตั้งแต่มัธยมศึกษาตอนต้น (ม.1-ม.3) และมัธยมศึกษาตอนปลาย (ม.4-ม.6)
+  renderMultiGradeHistory(history = [], activeGrade = "ม.1") {
+    const container = document.getElementById("portalMultiGradeHistoryContent");
+    if (!container) return;
+
+    const groups = [
+      {
+        title: "🌱 ช่วงชั้นที่ 3 : มัธยมศึกษาตอนต้น (ม.1 - ม.3)",
+        grades: ["ม.1", "ม.2", "ม.3"],
+        accent: "#4F46E5"
+      },
+      {
+        title: "🚀 ช่วงชั้นที่ 4 : มัธยมศึกษาตอนปลาย (ม.4 - ม.6)",
+        grades: ["ม.4", "ม.5", "ม.6"],
+        accent: "#059669"
+      }
+    ];
+
+    container.innerHTML = groups
+      .map((grp) => {
+        const gradeCardsHtml = grp.grades
+          .map((g) => {
+            const isCurrent = g === activeGrade;
+            const gHistory = history.filter((h) => h.grade === g);
+            const pre = gHistory.find((h) => h.test_type === "Pre-test");
+            const post = gHistory.find((h) => h.test_type === "Post-test");
+            const primaryTest = post || pre;
+
+            const borderStyle = isCurrent
+              ? `border: 2px solid ${grp.accent}; background: #F8FAFC;`
+              : gHistory.length > 0
+              ? `border: 1px solid #CBD5E1; background: #FFFFFF;`
+              : `border: 1px dashed #CBD5E1; background: #F8FAFC; opacity: 0.85;`;
+
+            const preBadge = pre
+              ? `<span class="font-bold text-indigo-700">${pre.score_total}/${pre.max_score} (${pre.score_percent}%)</span>`
+              : `<span class="text-slate-400">ยังไม่มีผลสอบ</span>`;
+
+            const postBadge = post
+              ? `<span class="font-bold ${post.passed ? "text-emerald-600" : "text-amber-600"}">${post.score_total}/${post.max_score} (${post.score_percent}%)</span>`
+              : `<span class="text-slate-400">ยังไม่มีผลสอบ</span>`;
+
+            let actionBtns = "";
+            if (primaryTest) {
+              actionBtns = `
+                <div class="flex gap-1.5 mt-3 pt-2 border-t border-slate-200 flex-wrap">
+                  <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.72rem; padding: 0.25rem 0.55rem;" onclick="App.openHistoryByGrade('${g}')">
+                    📊 ดูผล/กราฟ (${g})
+                  </button>
+                  ${
+                    post && post.passed
+                      ? `<button type="button" class="btn btn-gold btn-sm" style="font-size: 0.72rem; padding: 0.25rem 0.55rem;" onclick="App.downloadCertByTestId('${post.test_id}')">
+                          🎓 เกียรติบัตร ${g}
+                        </button>`
+                      : pre && pre.passed
+                      ? `<button type="button" class="btn btn-gold btn-sm" style="font-size: 0.72rem; padding: 0.25rem 0.55rem;" onclick="App.downloadCertByTestId('${pre.test_id}')">
+                          🎓 เกียรติบัตร ${g}
+                        </button>`
+                      : ""
+                  }
+                </div>
+              `;
+            }
+
+            return `
+              <div class="p-3 rounded-xl" style="${borderStyle}">
+                <div class="flex justify-between items-center mb-2">
+                  <span class="font-bold text-sm text-slate-900">ระดับชั้น ${g}</span>
+                  ${
+                    isCurrent
+                      ? `<span class="badge badge-primary" style="font-size: 0.68rem;">ชั้นปัจจุบัน</span>`
+                      : gHistory.length > 0
+                      ? `<span class="badge badge-success" style="font-size: 0.68rem;">บันทึกประวัติแล้ว</span>`
+                      : `<span class="badge badge-secondary" style="font-size: 0.68rem;">ยังไม่สอบ</span>`
+                  }
+                </div>
+                <div class="text-xs space-y-1">
+                  <div class="flex justify-between">
+                    <span class="text-slate-500">Pre-test:</span>
+                    ${preBadge}
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-slate-500">Post-test:</span>
+                    ${postBadge}
+                  </div>
+                </div>
+                ${actionBtns}
+              </div>
+            `;
+          })
+          .join("");
+
+        return `
+          <div class="mb-4 last:mb-0">
+            <div class="text-xs font-bold text-slate-700 mb-2">${grp.title}</div>
+            <div class="grid grid-cols-3 gap-3">
+              ${gradeCardsHtml}
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  },
+
+  openHistoryByGrade(grade) {
+    const history = this._cachedStudentHistory || [];
+    const gHistory = history.filter((h) => h.grade === grade);
+    const post = gHistory.find((h) => h.test_type === "Post-test");
+    const pre = gHistory.find((h) => h.test_type === "Pre-test");
+    if (post) {
+      this.showPastResult(post, pre || null);
+    } else if (pre) {
+      this.showPastResult(pre, null);
+    }
+  },
+
+  downloadCertByTestId(testId) {
+    const history = this._cachedStudentHistory || [];
+    const target = history.find((h) => h.test_id === testId);
+    if (target) {
+      CertificateEngine.downloadCertificatePDF(target);
     }
   },
 
@@ -613,7 +769,8 @@ const App = {
     this.currentResult = saved;
 
     const history = await DB.getStudentHistory(this.currentUser.email || this.currentUser.username);
-    const otherTest = history.find((h) => h.test_id !== saved.test_id);
+    this._cachedStudentHistory = history;
+    const otherTest = history.find((h) => h.grade === saved.grade && h.test_id !== saved.test_id);
 
     this.switchView("view-results");
     this.renderResultsView(saved, otherTest);
