@@ -1,9 +1,9 @@
 /**
  * ระบบจัดการฐานข้อมูล (Multi-Tier Database Engine)
- * 1. Primary: SQLite 3 Relational Database ผ่าน Backend REST API (/api/*)
- * 2. Browser DB: IndexedDB (PSUWIT_IT_Database) ตาราง students, assessments, admins พร้อม Index
- * 3. Fallback Cache: LocalStorage สำหรับการเข้าถึงแบบ Offline / Static Hosting (เช่น GitHub Pages)
- * 4. รองรับฐานข้อมูลผู้ใช้งานจากไฟล์ user.xlsx (นักเรียน 1,465 คน + ผู้ดูแลระบบ 3 คน = 1,468 คน)
+ * 1. Primary (เมื่อรัน node server.js): SQLite 3 Relational Database ผ่าน Backend REST API (/api/*)
+ * 2. Static / GitHub Pages Mode (เมื่อเปิดบน github.io หรือไม่มี Backend):
+ *    ใช้ฐานข้อมูลในเบราว์เซอร์ (LocalStorage + IndexedDB) พร้อมข้อมูลเริ่มต้น 1,468 คนจาก user.xlsx (js/users_data.js)
+ * 3. Optional Cloud Sync: รองรับการส่งข้อมูลต่อไปยัง External Webhook / Google Apps Script
  */
 
 const INITIAL_SEED_STUDENTS = (typeof window !== "undefined" && Array.isArray(window.INITIAL_USERS_STUDENTS))
@@ -53,12 +53,20 @@ const INITIAL_SEED_ADMINS = (typeof window !== "undefined" && Array.isArray(wind
       }
     ];
 
+// ตรวจสอบว่ารันอยู่บน Static Hosting เช่น GitHub Pages หรือเปิดไฟล์ตรงหรือไม่
+function isStaticHostEnvironment() {
+  if (typeof window === "undefined" || !window.location) return false;
+  const host = (window.location.hostname || "").toLowerCase();
+  const proto = window.location.protocol || "";
+  return proto === "file:" || host.endsWith("github.io") || host.endsWith("pages.dev") || host.endsWith("netlify.app");
+}
+
 // ============================================================================
-// IndexedDB Browser Relational Store
+// IndexedDB Browser Relational Store (Non-blocking with safety timeout)
 // ============================================================================
 const IDBEngine = {
-  dbName: "PSUWIT_IT_Database",
-  dbVersion: 3,
+  dbName: "PSUWIT_IT_Database_v3",
+  dbVersion: 1,
   _dbPromise: null,
 
   open() {
@@ -66,29 +74,55 @@ const IDBEngine = {
     if (typeof indexedDB === "undefined") return Promise.resolve(null);
 
     this._dbPromise = new Promise((resolve) => {
-      const req = indexedDB.open(this.dbName, this.dbVersion);
-
-      req.onupgradeneeded = (e) => {
-        const db = e.target.result;
-        if (!db.objectStoreNames.contains("students")) {
-          const studentStore = db.createObjectStore("students", { keyPath: "email" });
-          studentStore.createIndex("grade", "grade", { unique: false });
-          studentStore.createIndex("student_id", "student_id", { unique: false });
-        }
-        if (!db.objectStoreNames.contains("assessments")) {
-          const assessStore = db.createObjectStore("assessments", { keyPath: "test_id" });
-          assessStore.createIndex("email", "email", { unique: false });
-          assessStore.createIndex("grade", "grade", { unique: false });
-          assessStore.createIndex("test_type", "test_type", { unique: false });
-          assessStore.createIndex("submitted_at", "submitted_at", { unique: false });
-        }
-        if (!db.objectStoreNames.contains("admins")) {
-          db.createObjectStore("admins", { keyPath: "email" });
+      let settled = false;
+      const done = (val) => {
+        if (!settled) {
+          settled = true;
+          resolve(val);
         }
       };
 
-      req.onsuccess = (e) => resolve(e.target.result);
-      req.onerror = () => resolve(null);
+      // ป้องกัน IndexedDB ค้างกรณีเบราว์เซอร์บล็อกหรือเปิดหลายแท็บ
+      const timer = setTimeout(() => done(null), 800);
+
+      try {
+        const req = indexedDB.open(this.dbName, this.dbVersion);
+
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains("students")) {
+            const studentStore = db.createObjectStore("students", { keyPath: "email" });
+            studentStore.createIndex("grade", "grade", { unique: false });
+            studentStore.createIndex("student_id", "student_id", { unique: false });
+          }
+          if (!db.objectStoreNames.contains("assessments")) {
+            const assessStore = db.createObjectStore("assessments", { keyPath: "test_id" });
+            assessStore.createIndex("email", "email", { unique: false });
+            assessStore.createIndex("grade", "grade", { unique: false });
+            assessStore.createIndex("test_type", "test_type", { unique: false });
+            assessStore.createIndex("submitted_at", "submitted_at", { unique: false });
+          }
+          if (!db.objectStoreNames.contains("admins")) {
+            db.createObjectStore("admins", { keyPath: "email" });
+          }
+        };
+
+        req.onsuccess = (e) => {
+          clearTimeout(timer);
+          done(e.target.result);
+        };
+        req.onerror = () => {
+          clearTimeout(timer);
+          done(null);
+        };
+        req.onblocked = () => {
+          clearTimeout(timer);
+          done(null);
+        };
+      } catch (err) {
+        clearTimeout(timer);
+        done(null);
+      }
     });
 
     return this._dbPromise;
@@ -98,11 +132,15 @@ const IDBEngine = {
     const db = await this.open();
     if (!db) return [];
     return new Promise((resolve) => {
-      const tx = db.transaction(storeName, "readonly");
-      const store = tx.objectStore(storeName);
-      const req = store.getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => resolve([]);
+      try {
+        const tx = db.transaction(storeName, "readonly");
+        const store = tx.objectStore(storeName);
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => resolve([]);
+      } catch (e) {
+        resolve([]);
+      }
     });
   },
 
@@ -110,11 +148,15 @@ const IDBEngine = {
     const db = await this.open();
     if (!db) return false;
     return new Promise((resolve) => {
-      const tx = db.transaction(storeName, "readwrite");
-      const store = tx.objectStore(storeName);
-      store.put(record);
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = () => resolve(false);
+      try {
+        const tx = db.transaction(storeName, "readwrite");
+        const store = tx.objectStore(storeName);
+        store.put(record);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      } catch (e) {
+        resolve(false);
+      }
     });
   },
 
@@ -122,11 +164,15 @@ const IDBEngine = {
     const db = await this.open();
     if (!db || !Array.isArray(records)) return false;
     return new Promise((resolve) => {
-      const tx = db.transaction(storeName, "readwrite");
-      const store = tx.objectStore(storeName);
-      records.forEach((r) => store.put(r));
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = () => resolve(false);
+      try {
+        const tx = db.transaction(storeName, "readwrite");
+        const store = tx.objectStore(storeName);
+        records.forEach((r) => store.put(r));
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      } catch (e) {
+        resolve(false);
+      }
     });
   },
 
@@ -134,11 +180,15 @@ const IDBEngine = {
     const db = await this.open();
     if (!db) return false;
     return new Promise((resolve) => {
-      const tx = db.transaction(storeName, "readwrite");
-      const store = tx.objectStore(storeName);
-      store.delete(key);
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = () => resolve(false);
+      try {
+        const tx = db.transaction(storeName, "readwrite");
+        const store = tx.objectStore(storeName);
+        store.delete(key);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      } catch (e) {
+        resolve(false);
+      }
     });
   },
 
@@ -146,11 +196,15 @@ const IDBEngine = {
     const db = await this.open();
     if (!db) return false;
     return new Promise((resolve) => {
-      const tx = db.transaction(storeName, "readwrite");
-      const store = tx.objectStore(storeName);
-      store.clear();
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = () => resolve(false);
+      try {
+        const tx = db.transaction(storeName, "readwrite");
+        const store = tx.objectStore(storeName);
+        store.clear();
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      } catch (e) {
+        resolve(false);
+      }
     });
   }
 };
@@ -159,7 +213,13 @@ const IDBEngine = {
 // Main DB Adapter
 // ============================================================================
 const DB = {
-  serverAvailable: null,
+  // หากเปิดบน GitHub Pages ให้ตั้งค่า serverAvailable = false ทันทีเพื่อไม่ต้องยิง /api/* ให้ติด 404
+  serverAvailable: isStaticHostEnvironment() ? false : null,
+
+  canUseServer() {
+    if (isStaticHostEnvironment()) return false;
+    return this.serverAvailable !== false;
+  },
 
   getGasUrl() {
     return localStorage.getItem(APP_CONFIG.storageKeys.gasUrl) || "";
@@ -184,27 +244,37 @@ const DB = {
     } else {
       localStorage.removeItem(APP_CONFIG.storageKeys.googleClientId);
     }
+    if (!this.canUseServer()) return;
     try {
       await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ google_client_id: clean })
       });
-    } catch (e) {}
+    } catch (e) {
+      this.serverAvailable = false;
+    }
   },
 
   async loadServerSettings() {
+    if (!this.canUseServer()) return;
     try {
       const res = await fetch("/api/settings");
-      if (res.ok) {
+      const contentType = res.headers.get("content-type") || "";
+      if (res.ok && contentType.includes("application/json")) {
         const json = await res.json();
         if (json.status === "success" && json.data) {
+          this.serverAvailable = true;
           if (json.data.google_client_id !== undefined && json.data.google_client_id !== "") {
             localStorage.setItem(APP_CONFIG.storageKeys.googleClientId, json.data.google_client_id);
           }
         }
+      } else {
+        this.serverAvailable = false;
       }
-    } catch (e) {}
+    } catch (e) {
+      this.serverAvailable = false;
+    }
   },
 
   // Normalize username: รองรับทั้ง 6166@psuwit.ac.th และ 6166 หรือ winai
@@ -218,6 +288,57 @@ const DB = {
     return candidates;
   },
 
+  // ดึงข้อมูลนักเรียนจาก LocalStorage / Seed ทันทีโดยไม่บล็อก
+  getLocalStudentsSync() {
+    try {
+      const raw = localStorage.getItem(APP_CONFIG.storageKeys.students);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length >= 100) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    if (INITIAL_SEED_STUDENTS.length > 0) {
+      try {
+        localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(INITIAL_SEED_STUDENTS));
+      } catch (e) {}
+      return [...INITIAL_SEED_STUDENTS];
+    }
+    return [];
+  },
+
+  // ดึงข้อมูลแอดมินจาก LocalStorage / Seed ทันทีโดยไม่บล็อก
+  getLocalAdminsSync() {
+    let list = [];
+    try {
+      const raw = localStorage.getItem(APP_CONFIG.storageKeys.admins);
+      if (raw) {
+        list = JSON.parse(raw);
+      }
+    } catch (e) {
+      list = [];
+    }
+    if (!Array.isArray(list)) list = [];
+    let changed = false;
+    for (const seedAdmin of INITIAL_SEED_ADMINS) {
+      const idx = list.findIndex((a) => (a.email || "").toLowerCase() === seedAdmin.email.toLowerCase());
+      if (idx < 0) {
+        list.push({ ...seedAdmin });
+        changed = true;
+      } else if (!list[idx].password) {
+        list[idx].password = seedAdmin.password || "123456";
+        changed = true;
+      }
+    }
+    if (changed) {
+      try {
+        localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(list));
+      } catch (e) {}
+    }
+    return list;
+  },
+
   // ตรวจสอบการเข้าสู่ระบบด้วย Username และ Password
   async authenticateUser(rawUsername, rawPassword, loginRole = "any") {
     const candidates = this.normalizeUsernameCandidates(rawUsername);
@@ -227,27 +348,34 @@ const DB = {
       return { success: false, message: "กรุณากรอก Username และ Password ให้ครบถ้วน" };
     }
 
-    // 1. ลองตรวจสอบผ่าน Backend SQLite API ก่อน
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: rawUsername, password: pwd, loginRole })
-      });
-      const json = await res.json();
-      if (res.ok && json.status === "success" && json.data) {
-        this.serverAvailable = true;
-        return { success: true, user: json.data };
-      } else if (json && json.message) {
-        return { success: false, message: json.message };
+    // 1. ลองตรวจสอบผ่าน Backend SQLite API ก่อน (เฉพาะเมื่อไม่ได้รันบน Static Host เช่น GitHub Pages)
+    if (this.canUseServer()) {
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: rawUsername, password: pwd, loginRole })
+        });
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          const json = await res.json();
+          if (res.ok && json.status === "success" && json.data) {
+            this.serverAvailable = true;
+            return { success: true, user: json.data };
+          } else if (json && json.message) {
+            return { success: false, message: json.message };
+          }
+        } else {
+          this.serverAvailable = false;
+        }
+      } catch (e) {
+        this.serverAvailable = false;
       }
-    } catch (e) {
-      this.serverAvailable = false;
     }
 
-    // 2. Fallback ตรวจสอบจากฐานข้อมูลในเบราว์เซอร์ (IndexedDB / LocalStorage)
-    const admins = await this.getAdmins();
-    const students = await this.getStudents();
+    // 2. ตรวจสอบจากฐานข้อมูลในเบราว์เซอร์ (LocalStorage / Seed user.xlsx) ทันทีโดยไม่ค้าง
+    const admins = this.getLocalAdminsSync();
+    const students = this.getLocalStudentsSync();
 
     const adminMatch = admins.find((a) => {
       const u = (a.username || a.email || "").toLowerCase();
@@ -370,32 +498,39 @@ const DB = {
     let apiSuccess = false;
     let apiMessage = "";
 
-    // 1. ส่งคำขอเปลี่ยนรหัสผ่านไปยัง SQLite Backend API
-    try {
-      const res = await fetch("/api/auth/change-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: rawUsername,
-          currentPassword: curPwd,
-          newPassword: nextPwd,
-          isAdminReset: Boolean(isAdminReset)
-        })
-      });
-      const json = await res.json();
-      apiHandled = true;
-      apiSuccess = res.ok && json.status === "success";
-      apiMessage = json.message || "";
-      if (!apiSuccess) {
-        return { success: false, message: apiMessage || "ไม่สามารถเปลี่ยนรหัสผ่านได้" };
+    // 1. ส่งคำขอเปลี่ยนรหัสผ่านไปยัง SQLite Backend API (ถ้ามี Server)
+    if (this.canUseServer()) {
+      try {
+        const res = await fetch("/api/auth/change-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: rawUsername,
+            currentPassword: curPwd,
+            newPassword: nextPwd,
+            isAdminReset: Boolean(isAdminReset)
+          })
+        });
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          const json = await res.json();
+          apiHandled = true;
+          apiSuccess = res.ok && json.status === "success";
+          apiMessage = json.message || "";
+          if (!apiSuccess) {
+            return { success: false, message: apiMessage || "ไม่สามารถเปลี่ยนรหัสผ่านได้" };
+          }
+        } else {
+          this.serverAvailable = false;
+        }
+      } catch (e) {
+        this.serverAvailable = false;
       }
-    } catch (e) {
-      this.serverAvailable = false;
     }
 
-    // 2. อัปเดตใน IndexedDB และ LocalStorage ให้ตรงกันเสมอ
+    // 2. อัปเดตใน LocalStorage และ IndexedDB ให้ตรงกันเสมอ
     let updatedLocal = false;
-    const students = await this.getStudents();
+    const students = this.getLocalStudentsSync();
     const sIdx = students.findIndex((s) => {
       const u = (s.username || s.email || "").toLowerCase();
       const sid = String(s.student_id || "").toLowerCase();
@@ -409,11 +544,11 @@ const DB = {
       students[sIdx].password = nextPwd;
       students[sIdx].updated_at = new Date().toISOString();
       localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(students));
-      await IDBEngine.put("students", students[sIdx]);
+      IDBEngine.put("students", students[sIdx]);
       updatedLocal = true;
     }
 
-    const admins = await this.getAdmins();
+    const admins = this.getLocalAdminsSync();
     const aIdx = admins.findIndex((a) => {
       const u = (a.username || a.email || "").toLowerCase();
       const sid = String(a.student_id || "").toLowerCase();
@@ -427,7 +562,7 @@ const DB = {
       admins[aIdx].password = nextPwd;
       admins[aIdx].updated_at = new Date().toISOString();
       localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(admins));
-      await IDBEngine.put("admins", admins[aIdx]);
+      IDBEngine.put("admins", admins[aIdx]);
       updatedLocal = true;
     }
 
@@ -443,33 +578,38 @@ const DB = {
 
   // ตรวจสอบสถานะฐานข้อมูลทั้งหมด (SQLite Backend + IndexedDB)
   async getDatabaseStatus() {
-    try {
-      const res = await fetch("/api/status", { method: "GET" });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.status === "success") {
-          this.serverAvailable = true;
-          return {
-            connected: true,
-            mode: "server_sqlite",
-            engine: json.data.engine || "SQLite 3 (Relational Database)",
-            file: json.data.database_file || "database/psuwit_it.sqlite",
-            fileSize: json.data.file_size_bytes || 0,
-            tables: json.data.tables || { students: 0, assessments: 0 }
-          };
+    if (this.canUseServer()) {
+      try {
+        const res = await fetch("/api/status", { method: "GET" });
+        const contentType = res.headers.get("content-type") || "";
+        if (res.ok && contentType.includes("application/json")) {
+          const json = await res.json();
+          if (json.status === "success") {
+            this.serverAvailable = true;
+            return {
+              connected: true,
+              mode: "server_sqlite",
+              engine: json.data.engine || "SQLite 3 (Relational Database)",
+              file: json.data.database_file || "database/psuwit_it.sqlite",
+              fileSize: json.data.file_size_bytes || 0,
+              tables: json.data.tables || { students: 0, assessments: 0 }
+            };
+          }
+        } else {
+          this.serverAvailable = false;
         }
+      } catch (e) {
+        this.serverAvailable = false;
       }
-    } catch (e) {
-      this.serverAvailable = false;
     }
 
-    const students = await this.getStudents();
+    const students = this.getLocalStudentsSync();
     const assessments = await this.getAssessments("all");
     return {
       connected: true,
       mode: "browser_indexeddb",
-      engine: "IndexedDB (PSUWIT_IT_Database) + LocalStorage",
-      file: "Browser IndexedDB Storage (user.xlsx)",
+      engine: "Browser Database (LocalStorage + IndexedDB)",
+      file: "Static Hosting / GitHub Pages (user.xlsx 1,468 users)",
       fileSize: new Blob([JSON.stringify({ students, assessments })]).size,
       tables: {
         students: students.length,
@@ -497,88 +637,46 @@ const DB = {
     }
   },
 
-  // เตรียมข้อมูลเริ่มต้นจากไฟล์ user.xlsx สำหรับ IndexedDB และ LocalStorage
-  async initMockData() {
-    let rawStudents = localStorage.getItem(APP_CONFIG.storageKeys.students);
-    let parsedStudents = [];
-    try {
-      parsedStudents = rawStudents ? JSON.parse(rawStudents) : [];
-    } catch (e) {
-      parsedStudents = [];
-    }
-
-    // หากยังไม่มีข้อมูล หรือเป็นข้อมูลตัวอย่างเดิมที่มีน้อยกว่า 100 คน ให้โหลดฐานข้อมูลจริงจาก user.xlsx (1,465 คน)
-    if (!Array.isArray(parsedStudents) || parsedStudents.length < 100) {
-      localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(INITIAL_SEED_STUDENTS));
-      localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify(INITIAL_SEED_ASSESSMENTS));
-      await IDBEngine.clear("students");
-      await IDBEngine.clear("assessments");
-      await IDBEngine.putBulk("students", INITIAL_SEED_STUDENTS);
-    } else {
-      const idbStudents = await IDBEngine.getAll("students");
-      if (idbStudents.length < 100) {
-        await IDBEngine.putBulk("students", parsedStudents);
-      }
-    }
+  // เตรียมข้อมูลเริ่มต้นจากไฟล์ user.xlsx สำหรับ LocalStorage และ IndexedDB
+  initMockData() {
+    const students = this.getLocalStudentsSync();
+    const admins = this.getLocalAdminsSync();
 
     let rawAssessments = localStorage.getItem(APP_CONFIG.storageKeys.assessments);
     if (!rawAssessments || rawAssessments.includes("T-1715320000001")) {
       localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify([]));
-      await IDBEngine.clear("assessments");
     }
 
-    // เตรียมข้อมูลผู้ดูแลระบบเริ่มต้นจาก user.xlsx (winai@psuwit.ac.th, knok@psuwit.ac.th, 00001@psuwit.ac.th)
-    let rawAdmins = localStorage.getItem(APP_CONFIG.storageKeys.admins);
-    let parsedAdmins = [];
-    try {
-      parsedAdmins = rawAdmins ? JSON.parse(rawAdmins) : [];
-    } catch (e) {
-      parsedAdmins = [];
-    }
-
-    let adminsChanged = false;
-    for (const seedAdmin of INITIAL_SEED_ADMINS) {
-      const idx = parsedAdmins.findIndex((a) => (a.email || "").toLowerCase() === seedAdmin.email.toLowerCase());
-      if (idx < 0) {
-        parsedAdmins.push({ ...seedAdmin });
-        adminsChanged = true;
-      } else if (!parsedAdmins[idx].password) {
-        parsedAdmins[idx] = { ...seedAdmin, ...parsedAdmins[idx], password: parsedAdmins[idx].password || seedAdmin.password || "123456" };
-        adminsChanged = true;
-      }
-    }
-
-    if (!rawAdmins || adminsChanged) {
-      localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(parsedAdmins));
-      await IDBEngine.putBulk("admins", parsedAdmins);
-    }
+    // ซิงก์เข้า IndexedDB แบบเบื้องหลังโดยไม่บล็อกการทำงานหน้าเว็บ
+    setTimeout(() => {
+      IDBEngine.putBulk("students", students);
+      IDBEngine.putBulk("admins", admins);
+    }, 50);
   },
 
   // ดึงรายชื่อผู้ดูแลระบบทั้งหมด
   async getAdmins() {
-    try {
-      const res = await fetch("/api/admins");
-      if (res.ok) {
-        const json = await res.json();
-        if (json.status === "success" && Array.isArray(json.data)) {
-          localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(json.data));
-          await IDBEngine.putBulk("admins", json.data);
-          return json.data;
+    if (this.canUseServer()) {
+      try {
+        const res = await fetch("/api/admins");
+        const contentType = res.headers.get("content-type") || "";
+        if (res.ok && contentType.includes("application/json")) {
+          const json = await res.json();
+          if (json.status === "success" && Array.isArray(json.data)) {
+            this.serverAvailable = true;
+            localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(json.data));
+            IDBEngine.putBulk("admins", json.data);
+            return json.data;
+          }
+        } else {
+          this.serverAvailable = false;
         }
+      } catch (e) {
+        this.serverAvailable = false;
       }
-    } catch (e) {}
+    }
 
-    let list = await IDBEngine.getAll("admins");
-    if (!list || list.length === 0) {
-      const raw = localStorage.getItem(APP_CONFIG.storageKeys.admins);
-      list = raw ? JSON.parse(raw) : [...INITIAL_SEED_ADMINS];
-    }
-    for (const seedAdmin of INITIAL_SEED_ADMINS) {
-      if (!list.some((a) => (a.email || "").toLowerCase() === seedAdmin.email.toLowerCase())) {
-        list.push({ ...seedAdmin });
-      }
-    }
-    return list;
+    return this.getLocalAdminsSync();
   },
 
   // ตรวจสอบว่าอีเมล/ชื่อผู้ใช้นี้มีสิทธิ์ผู้ดูแลระบบหรือไม่
@@ -611,15 +709,19 @@ const DB = {
       created_at: adminData.created_at || new Date().toISOString()
     };
 
-    try {
-      await fetch("/api/admins", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(record)
-      });
-    } catch (e) {}
+    if (this.canUseServer()) {
+      try {
+        await fetch("/api/admins", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(record)
+        });
+      } catch (e) {
+        this.serverAvailable = false;
+      }
+    }
 
-    const admins = await this.getAdmins();
+    const admins = this.getLocalAdminsSync();
     const idx = admins.findIndex((a) => (a.email || "").toLowerCase() === cleanEmail);
     if (idx >= 0) {
       admins[idx] = { ...admins[idx], ...record };
@@ -627,7 +729,7 @@ const DB = {
       admins.push(record);
     }
     localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(admins));
-    await IDBEngine.put("admins", record);
+    IDBEngine.put("admins", record);
     return record;
   },
 
@@ -638,31 +740,40 @@ const DB = {
       throw new Error("ไม่สามารถลบผู้ดูแลระบบหลัก (winai@psuwit.ac.th) ได้");
     }
 
-    try {
-      await fetch(`/api/admins?email=${encodeURIComponent(cleanEmail)}`, { method: "DELETE" });
-    } catch (e) {}
+    if (this.canUseServer()) {
+      try {
+        await fetch(`/api/admins?email=${encodeURIComponent(cleanEmail)}`, { method: "DELETE" });
+      } catch (e) {
+        this.serverAvailable = false;
+      }
+    }
 
-    await IDBEngine.delete("admins", cleanEmail);
-    const admins = (await this.getAdmins()).filter((a) => (a.email || "").toLowerCase() !== cleanEmail);
+    IDBEngine.delete("admins", cleanEmail);
+    const admins = this.getLocalAdminsSync().filter((a) => (a.email || "").toLowerCase() !== cleanEmail);
     localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(admins));
     return true;
   },
 
   // ดึงรายชื่อนักเรียนทั้งหมด
   async getStudents() {
-    try {
-      const res = await fetch("/api/students");
-      if (res.ok) {
-        const json = await res.json();
-        if (json.status === "success" && Array.isArray(json.data)) {
-          this.serverAvailable = true;
-          localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(json.data));
-          await IDBEngine.putBulk("students", json.data);
-          return json.data;
+    if (this.canUseServer()) {
+      try {
+        const res = await fetch("/api/students");
+        const contentType = res.headers.get("content-type") || "";
+        if (res.ok && contentType.includes("application/json")) {
+          const json = await res.json();
+          if (json.status === "success" && Array.isArray(json.data)) {
+            this.serverAvailable = true;
+            localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(json.data));
+            IDBEngine.putBulk("students", json.data);
+            return json.data;
+          }
+        } else {
+          this.serverAvailable = false;
         }
+      } catch (e) {
+        this.serverAvailable = false;
       }
-    } catch (e) {
-      this.serverAvailable = false;
     }
 
     const gasUrl = this.getGasUrl();
@@ -672,30 +783,19 @@ const DB = {
         const json = await res.json();
         if (json.status === "success" && Array.isArray(json.data)) {
           localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(json.data));
-          await IDBEngine.putBulk("students", json.data);
+          IDBEngine.putBulk("students", json.data);
           return json.data;
         }
       } catch (err) {}
     }
 
-    const idbList = await IDBEngine.getAll("students");
-    if (idbList && idbList.length >= 100) {
-      return idbList;
-    }
-
-    const raw = localStorage.getItem(APP_CONFIG.storageKeys.students);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return parsed.length > 0 ? parsed : [...INITIAL_SEED_STUDENTS];
+    return this.getLocalStudentsSync();
   },
 
   // บันทึก / แก้ไขข้อมูลนักเรียน
   async saveStudent(studentData) {
     const cleanEmail = (studentData.email || studentData.username || "").trim().toLowerCase();
-    let students = [];
-    try {
-      const raw = localStorage.getItem(APP_CONFIG.storageKeys.students);
-      students = raw ? JSON.parse(raw) : [];
-    } catch (e) {}
+    const students = this.getLocalStudentsSync();
 
     const existingIndex = students.findIndex((s) => (s.email || "").toLowerCase() === cleanEmail);
     const existing = existingIndex >= 0 ? students[existingIndex] : null;
@@ -720,24 +820,28 @@ const DB = {
       updated_at: new Date().toISOString()
     };
 
-    try {
-      const res = await fetch("/api/students", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(record)
-      });
-      if (res.ok) {
-        this.serverAvailable = true;
+    if (this.canUseServer()) {
+      try {
+        const res = await fetch("/api/students", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(record)
+        });
+        if (res.ok) {
+          this.serverAvailable = true;
+        }
+      } catch (e) {
+        this.serverAvailable = false;
       }
-    } catch (e) {}
+    }
 
     if (existingIndex >= 0) {
       students[existingIndex] = record;
     } else {
       students.push(record);
     }
-    await IDBEngine.put("students", record);
     localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(students));
+    IDBEngine.put("students", record);
 
     const gasUrl = this.getGasUrl();
     if (gasUrl) {
@@ -755,15 +859,17 @@ const DB = {
   async deleteStudent(email) {
     const cleanEmail = (email || "").trim().toLowerCase();
 
-    try {
-      await fetch(`/api/students?email=${encodeURIComponent(cleanEmail)}`, { method: "DELETE" });
-    } catch (e) {}
+    if (this.canUseServer()) {
+      try {
+        await fetch(`/api/students?email=${encodeURIComponent(cleanEmail)}`, { method: "DELETE" });
+      } catch (e) {
+        this.serverAvailable = false;
+      }
+    }
 
-    await IDBEngine.delete("students", cleanEmail);
+    IDBEngine.delete("students", cleanEmail);
 
-    const raw = localStorage.getItem(APP_CONFIG.storageKeys.students);
-    let students = raw ? JSON.parse(raw) : [];
-    students = students.filter((s) => (s.email || "").toLowerCase() !== cleanEmail);
+    const students = this.getLocalStudentsSync().filter((s) => (s.email || "").toLowerCase() !== cleanEmail);
     localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(students));
 
     const gasUrl = this.getGasUrl();
@@ -781,21 +887,25 @@ const DB = {
   async resetAttempts(email) {
     const cleanEmail = (email || "").trim().toLowerCase();
 
-    try {
-      await fetch("/api/students/reset", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: cleanEmail })
-      });
-    } catch (e) {}
+    if (this.canUseServer()) {
+      try {
+        await fetch("/api/students/reset", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: cleanEmail })
+        });
+      } catch (e) {
+        this.serverAvailable = false;
+      }
+    }
 
-    const students = await this.getStudents();
+    const students = this.getLocalStudentsSync();
     const target = students.find((s) => (s.email || "").toLowerCase() === cleanEmail);
     if (target) {
       target.pretest_completed = false;
       target.posttest_completed = false;
-      await IDBEngine.put("students", target);
       localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(students));
+      IDBEngine.put("students", target);
     }
 
     const gasUrl = this.getGasUrl();
@@ -813,22 +923,27 @@ const DB = {
   async getAssessments(gradeFilter = "all") {
     let assessments = [];
 
-    try {
-      const res = await fetch(`/api/assessments?grade=${encodeURIComponent(gradeFilter)}`);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.status === "success" && Array.isArray(json.data)) {
-          this.serverAvailable = true;
-          assessments = json.data;
-          if (gradeFilter === "all") {
-            localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify(assessments));
-            await IDBEngine.putBulk("assessments", assessments);
+    if (this.canUseServer()) {
+      try {
+        const res = await fetch(`/api/assessments?grade=${encodeURIComponent(gradeFilter)}`);
+        const contentType = res.headers.get("content-type") || "";
+        if (res.ok && contentType.includes("application/json")) {
+          const json = await res.json();
+          if (json.status === "success" && Array.isArray(json.data)) {
+            this.serverAvailable = true;
+            assessments = json.data;
+            if (gradeFilter === "all") {
+              localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify(assessments));
+              IDBEngine.putBulk("assessments", assessments);
+            }
+            return assessments;
           }
-          return assessments;
+        } else {
+          this.serverAvailable = false;
         }
+      } catch (e) {
+        this.serverAvailable = false;
       }
-    } catch (e) {
-      this.serverAvailable = false;
     }
 
     const gasUrl = this.getGasUrl();
@@ -840,17 +955,18 @@ const DB = {
           assessments = json.data;
           if (gradeFilter === "all") {
             localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify(assessments));
-            await IDBEngine.putBulk("assessments", assessments);
+            IDBEngine.putBulk("assessments", assessments);
           }
           return assessments;
         }
       } catch (err) {}
     }
 
-    assessments = await IDBEngine.getAll("assessments");
-    if (!assessments || assessments.length === 0) {
+    try {
       const raw = localStorage.getItem(APP_CONFIG.storageKeys.assessments);
       assessments = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      assessments = [];
     }
 
     if (gradeFilter !== "all") {
@@ -875,16 +991,20 @@ const DB = {
       submitted_at: resultData.submitted_at || new Date().toISOString()
     };
 
-    try {
-      const res = await fetch("/api/assessments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(record)
-      });
-      if (res.ok) {
-        this.serverAvailable = true;
+    if (this.canUseServer()) {
+      try {
+        const res = await fetch("/api/assessments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(record)
+        });
+        if (res.ok) {
+          this.serverAvailable = true;
+        }
+      } catch (e) {
+        this.serverAvailable = false;
       }
-    } catch (e) {}
+    }
 
     let assessments = [];
     try {
@@ -894,9 +1014,9 @@ const DB = {
 
     assessments.unshift(record);
     localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify(assessments));
-    await IDBEngine.put("assessments", record);
+    IDBEngine.put("assessments", record);
 
-    const students = await this.getStudents();
+    const students = this.getLocalStudentsSync();
     const studentIndex = students.findIndex((s) => (s.email || "").toLowerCase() === cleanEmail);
 
     if (studentIndex >= 0) {
@@ -907,7 +1027,7 @@ const DB = {
       }
       students[studentIndex].name = record.student_name || students[studentIndex].name;
       students[studentIndex].grade = record.grade || students[studentIndex].grade;
-      await IDBEngine.put("students", students[studentIndex]);
+      IDBEngine.put("students", students[studentIndex]);
     } else {
       const newStudent = {
         student_id: record.student_id || cleanEmail.split("@")[0],
@@ -922,7 +1042,7 @@ const DB = {
         created_at: new Date().toISOString()
       };
       students.push(newStudent);
-      await IDBEngine.put("students", newStudent);
+      IDBEngine.put("students", newStudent);
     }
     localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(students));
 
@@ -1054,38 +1174,46 @@ const DB = {
     const students = jsonData?.tables?.students || jsonData?.students || [];
     const assessments = jsonData?.tables?.assessments || jsonData?.assessments || [];
 
-    try {
-      await fetch("/api/database/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ students, assessments })
-      });
-    } catch (e) {}
+    if (this.canUseServer()) {
+      try {
+        await fetch("/api/database/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ students, assessments })
+        });
+      } catch (e) {
+        this.serverAvailable = false;
+      }
+    }
 
     if (students.length > 0) {
       localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(students));
-      await IDBEngine.putBulk("students", students);
+      IDBEngine.putBulk("students", students);
     }
     if (assessments.length > 0) {
       localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify(assessments));
-      await IDBEngine.putBulk("assessments", assessments);
+      IDBEngine.putBulk("assessments", assessments);
     }
     return true;
   },
 
   async resetDatabaseToSeed() {
-    try {
-      await fetch("/api/database/seed", { method: "POST" });
-    } catch (e) {}
+    if (this.canUseServer()) {
+      try {
+        await fetch("/api/database/seed", { method: "POST" });
+      } catch (e) {
+        this.serverAvailable = false;
+      }
+    }
 
-    await IDBEngine.clear("students");
-    await IDBEngine.clear("assessments");
-    await IDBEngine.clear("admins");
     localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(INITIAL_SEED_STUDENTS));
     localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify(INITIAL_SEED_ASSESSMENTS));
     localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(INITIAL_SEED_ADMINS));
-    await IDBEngine.putBulk("students", INITIAL_SEED_STUDENTS);
-    await IDBEngine.putBulk("admins", INITIAL_SEED_ADMINS);
+    IDBEngine.clear("students");
+    IDBEngine.clear("assessments");
+    IDBEngine.clear("admins");
+    IDBEngine.putBulk("students", INITIAL_SEED_STUDENTS);
+    IDBEngine.putBulk("admins", INITIAL_SEED_ADMINS);
     return true;
   }
 };
