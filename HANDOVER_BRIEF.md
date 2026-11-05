@@ -105,12 +105,15 @@ d:\Test/
 ---
 
 ## 6. การเชื่อมต่อฐานข้อมูลออนไลน์ Supabase (PostgreSQL Cloud Database)
-ระบบรองรับการทำงานร่วมกับ **Supabase PostgreSQL** โดยตรงผ่าน `@supabase/supabase-js@2` ทำให้เมื่อเปิดใช้งานบน **GitHub Pages** หรือทุกอุปกรณ์ นักเรียนและผู้ดูแลระบบสามารถใช้ฐานข้อมูลออนไลน์ชุดเดียวกันแบบ Real-time:
-1. **สคริปต์สร้างตาราง (`database/supabase_schema.sql`)**:
-   - สร้างตาราง `public.students`, `public.assessments`, `public.admins`, และ `public.system_settings` พร้อม Indexes, Grants (`anon`, `authenticated`), และ Row-Level Security (RLS) Policies
-2. **การตั้งค่าใช้งาน**:
-   - **วิธีที่ 1 (ผ่านหน้าเว็บ Admin)**: เข้าหน้าผู้ดูแลระบบ -> แท็บ **🗄️ จัดการฐานข้อมูล (Database)** -> การ์ด **⚡ เชื่อมต่อฐานข้อมูลออนไลน์ Supabase** กรอก `Supabase Project URL` และ `Supabase Anon / Publishable Key` แล้วกดบันทึก และกดปุ่ม **🚀 อัปโหลดรายชื่อ 1,468 คน (user.xlsx) ขึ้น Supabase**
-   - **วิธีที่ 2 (ตั้งค่าถาวรสำหรับทุกเครื่องบน GitHub Pages)**: ใส่ค่า `supabaseUrl` และ `supabaseAnonKey` ในไฟล์ `js/config.js`
+ระบบเชื่อมต่อกับ **Supabase PostgreSQL** โดยตรงผ่าน `@supabase/supabase-js@2` ทำให้เมื่อเปิดใช้งานบน **GitHub Pages** หรือทุกอุปกรณ์ นักเรียนและผู้ดูแลระบบสามารถใช้ฐานข้อมูลออนไลน์ชุดเดียวกันแบบ Real-time:
+1. **โปรเจกต์ Supabase ปัจจุบัน**:
+   - Project URL: `https://tutuacgluubwpiomaepv.supabase.co`
+   - Publishable API Key: `sb_publishable_nN34iose4rGJmLuIogmryQ_EE_pygrv` (กำหนดไว้ใน `js/config.js` เรียบร้อยแล้ว)
+   - ฐานข้อมูลสร้างตารางครบทั้ง 4 ตาราง: `students`, `admins`, `assessments`, `system_settings`
+   - มีข้อมูลเริ่มต้นใน Cloud สมบูรณ์: นักเรียน 1,465 คน + ผู้ดูแลระบบ 3 คน (พร้อมรหัสผ่านเริ่มต้น `123456`)
+2. **สคริปต์สร้างตารางและสคริปต์ซิงก์ข้อมูล**:
+   - `database/supabase_schema.sql` — โครงสร้างตาราง พร้อม Indexes ประสิทธิภาพสูง, Grants, และ RLS Policies
+   - `scripts/upload_seed_supabase.js` — สคริปต์ Node.js สำหรับนำเข้าข้อมูลผู้ใช้ 1,468 คนขึ้น Supabase แบบอัตโนมัติ
 
 ---
 

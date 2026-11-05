@@ -26,8 +26,10 @@ CREATE TABLE IF NOT EXISTS public.students (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS idx_students_grade_student_id ON public.students (grade, student_id);
 CREATE INDEX IF NOT EXISTS idx_students_grade_room ON public.students (grade, room);
 CREATE INDEX IF NOT EXISTS idx_students_student_id ON public.students (student_id);
+CREATE INDEX IF NOT EXISTS idx_students_active_email ON public.students (email) WHERE status = 'active';
 
 -- 2. ตารางประวัติผลการทดสอบสมรรถนะ IT (assessments - เก็บสะสมรายระดับชั้น ม.1-ม.3 และ ม.4-ม.6)
 CREATE TABLE IF NOT EXISTS public.assessments (
@@ -54,9 +56,10 @@ CREATE TABLE IF NOT EXISTS public.assessments (
   submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_assessments_email_grade ON public.assessments (email, grade);
-CREATE INDEX IF NOT EXISTS idx_assessments_grade ON public.assessments (grade);
+CREATE INDEX IF NOT EXISTS idx_assessments_email_grade_submitted ON public.assessments (email, grade, submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_assessments_grade_submitted_at ON public.assessments (grade, submitted_at DESC);
 CREATE INDEX IF NOT EXISTS idx_assessments_submitted_at ON public.assessments (submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_assessments_passed_posttest ON public.assessments (grade) WHERE test_type = 'Post-test' AND passed = TRUE;
 
 -- 3. ตารางข้อมูลผู้ดูแลระบบ (admins)
 CREATE TABLE IF NOT EXISTS public.admins (
@@ -126,3 +129,4 @@ VALUES
   ('53001', 'นางสาว', 'กนก', 'กล่อมขจิต', 'นางสาวกนก กล่อมขจิต', 'knok@psuwit.ac.th', 'knok@psuwit.ac.th', '123456', 'admin'),
   ('1', 'นาย', 'ดูแลระบบ', 'เทพสุดสุด', 'นายดูแลระบบ เทพสุดสุด', '00001@psuwit.ac.th', '00001@psuwit.ac.th', '123456', 'super_admin')
 ON CONFLICT (email) DO NOTHING;
+

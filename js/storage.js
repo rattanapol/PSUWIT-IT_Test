@@ -472,8 +472,10 @@ CREATE TABLE IF NOT EXISTS public.students (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS idx_students_grade_student_id ON public.students (grade, student_id);
 CREATE INDEX IF NOT EXISTS idx_students_grade_room ON public.students (grade, room);
 CREATE INDEX IF NOT EXISTS idx_students_student_id ON public.students (student_id);
+CREATE INDEX IF NOT EXISTS idx_students_active_email ON public.students (email) WHERE status = 'active';
 
 CREATE TABLE IF NOT EXISTS public.assessments (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -499,9 +501,10 @@ CREATE TABLE IF NOT EXISTS public.assessments (
   submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_assessments_email_grade ON public.assessments (email, grade);
-CREATE INDEX IF NOT EXISTS idx_assessments_grade ON public.assessments (grade);
+CREATE INDEX IF NOT EXISTS idx_assessments_email_grade_submitted ON public.assessments (email, grade, submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_assessments_grade_submitted_at ON public.assessments (grade, submitted_at DESC);
 CREATE INDEX IF NOT EXISTS idx_assessments_submitted_at ON public.assessments (submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_assessments_passed_posttest ON public.assessments (grade) WHERE test_type = 'Post-test' AND passed = TRUE;
 
 CREATE TABLE IF NOT EXISTS public.admins (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -1875,6 +1878,25 @@ ON CONFLICT (email) DO NOTHING;
 
   async getStudentHistory(email) {
     const cleanEmail = (email || "").trim().toLowerCase();
+    if (!cleanEmail) return [];
+
+    // ใช้ Composite Index (idx_assessments_email_grade_submitted) ดึงเฉพาะแถวของนักเรียนคนนี้โดยตรง ไม่ต้องดึงทั้งตาราง
+    if (this.hasSupabase()) {
+      const sb = this.getSupabaseClient();
+      if (sb) {
+        try {
+          const { data, error } = await sb
+            .from("assessments")
+            .select("*")
+            .eq("email", cleanEmail)
+            .order("submitted_at", { ascending: false });
+          if (!error && Array.isArray(data)) {
+            return data.map((r) => this._mapSupabaseRowToAssessment(r));
+          }
+        } catch (e) {}
+      }
+    }
+
     const all = await this.getAssessments("all");
     return all.filter((a) => (a.email || "").toLowerCase() === cleanEmail);
   },

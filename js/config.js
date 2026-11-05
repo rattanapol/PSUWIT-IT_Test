@@ -16,8 +16,8 @@ const APP_CONFIG = {
   // การตั้งค่าฐานข้อมูลออนไลน์ Supabase (PostgreSQL Cloud Database)
   // สามารถกรอกค่าไว้ที่นี่เพื่อให้ทุกเครื่องที่เข้าเว็บ (เช่น บน GitHub Pages) เชื่อมต่อ Supabase อัตโนมัติ
   // หรือตั้งค่าผ่านหน้าผู้ดูแลระบบ -> แท็บ "🗄️ จัดการฐานข้อมูล (Database)" ได้ตลอดเวลา
-  supabaseUrl: "",       // ตัวอย่าง: "https://xxxxxxxxxxxx.supabase.co"
-  supabaseAnonKey: "",   // ตัวอย่าง: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." หรือ "sb_publishable_..."
+  supabaseUrl: "https://tutuacgluubwpiomaepv.supabase.co", // โปรเจกต์: tutuacgluubwpiomaepv
+  supabaseAnonKey: "sb_publishable_nN34iose4rGJmLuIogmryQ_EE_pygrv", // Supabase Publishable Key
 
   // รูปแบบอีเมลองค์กรของนักเรียน: รหัสนักเรียน 4 หลัก@psuwit.ac.th (หรืออีเมลองค์กร @psuwit.ac.th)
   studentSsoRegex: /^[0-9]{4}@psuwit\.ac\.th$/i,
