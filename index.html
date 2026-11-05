@@ -19,6 +19,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- jsPDF CDN for crisp PDF Certificate Generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- Supabase JS Client v2 CDN for Cloud PostgreSQL Database -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Google Identity Services (OAuth 2.0 / Sign in with Google) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
@@ -828,6 +830,66 @@
             </div>
           </div>
 
+          <!-- Card 2.5: เชื่อมต่อฐานข้อมูลออนไลน์ Supabase (PostgreSQL Cloud Database) -->
+          <div class="stat-card mb-6" style="border-top: 4px solid #10B981;">
+            <div class="flex justify-between items-start flex-wrap gap-2 mb-3">
+              <div>
+                <h3 class="font-bold text-lg text-emerald-900">⚡ เชื่อมต่อฐานข้อมูลออนไลน์ Supabase (PostgreSQL Cloud Database)</h3>
+                <p class="text-xs text-slate-600 mt-0.5">
+                  ช่วยให้เว็บไซต์บน <strong>GitHub Pages</strong> หรือทุกเครื่องสามารถใช้งานฐานข้อมูลออนไลน์ร่วมกันแบบ Real-time (ล็อกอิน, เปลี่ยนรหัสผ่าน, เลื่อนชั้น, และบันทึกผลสอบสะสม ม.1-ม.6 ลง Supabase PostgreSQL โดยตรง)
+                </p>
+              </div>
+              <span id="supabaseConnBadge" class="badge badge-secondary">ยังไม่ได้ตั้งค่า</span>
+            </div>
+
+            <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 mb-4 leading-relaxed">
+              <strong>📌 ขั้นตอนการตั้งค่าใช้งานบน Supabase (ทำเพียงครั้งเดียว):</strong>
+              <ol style="margin-left: 1.2rem; margin-top: 0.25rem;">
+                <li>กดปุ่ม <strong>📥 ดาวน์โหลดไฟล์ SQL สำหรับสร้างตาราง (supabase_schema.sql)</strong> ด้านล่าง แล้วนำไปวางและกด <strong>Run</strong> ในเมนู <code>SQL Editor</code> บนเว็บ Supabase Dashboard</li>
+                <li>คัดลอก <code>Project URL</code> และ <code>anon / publishable key</code> จากเมนู <code>Project Settings &gt; API</code> บน Supabase มาวางในช่องด้านล่าง แล้วกด <strong>💾 บันทึกการตั้งค่า Supabase</strong> (หรือใส่ไว้ในไฟล์ <code>js/config.js</code> เพื่อให้ทุกเครื่องเชื่อมต่ออัตโนมัติ)</li>
+                <li>กดปุ่ม <strong>🚀 อัปโหลดรายชื่อ 1,468 คน (user.xlsx) ขึ้น Supabase</strong> เพื่อนำข้อมูลนักเรียน 1,465 คน และผู้ดูแลระบบ 3 คน เข้าสู่ฐานข้อมูล Supabase ทันที</li>
+              </ol>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div class="form-group">
+                <label class="form-label" for="settingsSupabaseUrl">Supabase Project URL *</label>
+                <input
+                  type="url"
+                  id="settingsSupabaseUrl"
+                  class="form-control"
+                  placeholder="เช่น https://abcdefghijklm.supabase.co"
+                >
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="settingsSupabaseKey">Supabase Anon / Publishable API Key *</label>
+                <input
+                  type="password"
+                  id="settingsSupabaseKey"
+                  class="form-control"
+                  placeholder="เช่น eyJhbGciOiJIUzI1NiIs... หรือ sb_publishable_..."
+                >
+              </div>
+            </div>
+
+            <div id="supabaseStatusFeedback" class="mt-1 mb-3 text-sm font-semibold"></div>
+
+            <div class="flex flex-wrap gap-2">
+              <button type="button" id="btnTestSupabase" class="btn btn-secondary btn-sm">
+                🔌 ทดสอบการเชื่อมต่อ Supabase
+              </button>
+              <button type="button" id="btnSaveSupabase" class="btn btn-primary btn-sm" style="background: linear-gradient(135deg, #059669, #10B981);">
+                💾 บันทึกการตั้งค่า Supabase
+              </button>
+              <button type="button" id="btnSyncSeedSupabase" class="btn btn-secondary btn-sm">
+                🚀 อัปโหลดรายชื่อ 1,468 คน (user.xlsx) ขึ้น Supabase
+              </button>
+              <button type="button" id="btnDownloadSupabaseSql" class="btn btn-secondary btn-sm">
+                📥 ดาวน์โหลดไฟล์ SQL สร้างตาราง (supabase_schema.sql)
+              </button>
+            </div>
+          </div>
+
           <!-- Card 3: Cloud Sync -->
           <div class="grid grid-cols-1 gap-6">
             <div class="stat-card">
@@ -997,15 +1059,15 @@
   </div>
 
   <!-- Application Scripts in Order -->
-  <script src="js/config.js?v=4"></script>
-  <script src="js/questions.js?v=4"></script>
-  <script src="js/users_data.js?v=4"></script>
-  <script src="js/storage.js?v=4"></script>
-  <script src="js/charts.js?v=4"></script>
-  <script src="js/certificate.js?v=4"></script>
-  <script src="js/assessment.js?v=4"></script>
-  <script src="js/admin.js?v=4"></script>
-  <script src="js/app.js?v=4"></script>
+  <script src="js/config.js?v=5"></script>
+  <script src="js/questions.js?v=5"></script>
+  <script src="js/users_data.js?v=5"></script>
+  <script src="js/storage.js?v=5"></script>
+  <script src="js/charts.js?v=5"></script>
+  <script src="js/certificate.js?v=5"></script>
+  <script src="js/assessment.js?v=5"></script>
+  <script src="js/admin.js?v=5"></script>
+  <script src="js/app.js?v=5"></script>
 
 </body>
 

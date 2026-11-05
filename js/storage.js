@@ -215,10 +215,421 @@ const IDBEngine = {
 const DB = {
   // หากเปิดบน GitHub Pages ให้ตั้งค่า serverAvailable = false ทันทีเพื่อไม่ต้องยิง /api/* ให้ติด 404
   serverAvailable: isStaticHostEnvironment() ? false : null,
+  _supabaseClient: null,
+  _supabaseClientKeyCache: "",
 
   canUseServer() {
     if (isStaticHostEnvironment()) return false;
     return this.serverAvailable !== false;
+  },
+
+  // ==========================================================================
+  // Supabase Cloud PostgreSQL Configuration & Client
+  // ==========================================================================
+  getSupabaseConfig() {
+    const url = (
+      localStorage.getItem(APP_CONFIG.storageKeys.supabaseUrl) ||
+      APP_CONFIG.supabaseUrl ||
+      ""
+    ).trim();
+    const anonKey = (
+      localStorage.getItem(APP_CONFIG.storageKeys.supabaseAnonKey) ||
+      APP_CONFIG.supabaseAnonKey ||
+      ""
+    ).trim();
+    return { url, anonKey };
+  },
+
+  setSupabaseConfig(url, anonKey) {
+    const cleanUrl = (url || "").trim().replace(/\/+$/, "");
+    const cleanKey = (anonKey || "").trim();
+    if (cleanUrl) {
+      localStorage.setItem(APP_CONFIG.storageKeys.supabaseUrl, cleanUrl);
+    } else {
+      localStorage.removeItem(APP_CONFIG.storageKeys.supabaseUrl);
+    }
+    if (cleanKey) {
+      localStorage.setItem(APP_CONFIG.storageKeys.supabaseAnonKey, cleanKey);
+    } else {
+      localStorage.removeItem(APP_CONFIG.storageKeys.supabaseAnonKey);
+    }
+    this._supabaseClient = null;
+    this._supabaseClientKeyCache = "";
+  },
+
+  hasSupabase() {
+    const { url, anonKey } = this.getSupabaseConfig();
+    return Boolean(
+      url &&
+        anonKey &&
+        typeof window !== "undefined" &&
+        window.supabase &&
+        typeof window.supabase.createClient === "function"
+    );
+  },
+
+  getSupabaseClient(customUrl = null, customKey = null) {
+    if (typeof window === "undefined" || !window.supabase || typeof window.supabase.createClient !== "function") {
+      return null;
+    }
+    const cfg = this.getSupabaseConfig();
+    const targetUrl = (customUrl !== null ? customUrl : cfg.url || "").trim().replace(/\/+$/, "");
+    const targetKey = (customKey !== null ? customKey : cfg.anonKey || "").trim();
+    if (!targetUrl || !targetKey) return null;
+
+    const cacheKey = `${targetUrl}::${targetKey}`;
+    if (this._supabaseClient && this._supabaseClientKeyCache === cacheKey) {
+      return this._supabaseClient;
+    }
+
+    try {
+      const client = window.supabase.createClient(targetUrl, targetKey, {
+        auth: { persistSession: false, autoRefreshToken: false }
+      });
+      if (customUrl === null && customKey === null) {
+        this._supabaseClient = client;
+        this._supabaseClientKeyCache = cacheKey;
+      }
+      return client;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  // ทดสอบการเชื่อมต่อกับ Supabase PostgreSQL
+  async testSupabaseConnection(customUrl = null, customKey = null) {
+    const client = this.getSupabaseClient(customUrl, customKey);
+    if (!client) {
+      return {
+        success: false,
+        message: "กรุณาระบุ Supabase Project URL และ Supabase Anon / Publishable Key ให้ครบถ้วน"
+      };
+    }
+
+    try {
+      const { count: studentsCount, error: stuErr } = await client
+        .from("students")
+        .select("email", { count: "exact", head: true });
+
+      if (stuErr) {
+        const msg = stuErr.message || String(stuErr);
+        const code = stuErr.code || "";
+        if (code === "42P01" || code === "PGRST205" || msg.includes("does not exist") || msg.includes("schema cache")) {
+          return {
+            success: false,
+            needsSchema: true,
+            message:
+              "⚠️ เชื่อมต่อโปรเจกต์ Supabase สำเร็จ แต่ยังไม่มีตารางข้อมูล! กรุณากดปุ่ม '📥 ดาวน์โหลดไฟล์ SQL สร้างตาราง (supabase_schema.sql)' แล้วนำไป Run ใน SQL Editor บน Supabase Dashboard"
+          };
+        }
+        return {
+          success: false,
+          message: `ไม่สามารถอ่านตารางบน Supabase ได้: ${msg} (${code || "Error"})`
+        };
+      }
+
+      const { count: assessCount } = await client
+        .from("assessments")
+        .select("test_id", { count: "exact", head: true });
+
+      return {
+        success: true,
+        studentsCount: studentsCount || 0,
+        assessmentsCount: assessCount || 0,
+        message: `เชื่อมต่อ Supabase PostgreSQL สำเร็จ! (พบนักเรียน ${(studentsCount || 0).toLocaleString()} คน, ผลสอบ ${(assessCount || 0).toLocaleString()} รายการ)`
+      };
+    } catch (err) {
+      return {
+        success: false,
+        message: "ไม่สามารถเชื่อมต่อ Supabase URL ที่ระบุได้ กรุณาตรวจสอบ URL และ API Key อีกครั้ง"
+      };
+    }
+  },
+
+  // อัปโหลดรายชื่อผู้ใช้งานเริ่มต้น 1,468 คน (จาก user.xlsx) ขึ้นสู่ตารางบน Supabase
+  async syncSeedToSupabase(onProgress = null) {
+    const client = this.getSupabaseClient();
+    if (!client) {
+      return {
+        success: false,
+        message: "กรุณาบันทึกค่า Supabase Project URL และ Anon Key ก่อนอัปโหลดข้อมูล"
+      };
+    }
+
+    const students = this.getLocalStudentsSync();
+    const admins = this.getLocalAdminsSync();
+    let localAssessments = [];
+    try {
+      const raw = localStorage.getItem(APP_CONFIG.storageKeys.assessments);
+      localAssessments = raw ? JSON.parse(raw) : [];
+    } catch (e) {}
+
+    try {
+      // 1. Upsert ผู้ดูแลระบบ (admins)
+      if (onProgress) onProgress("⏳ กำลังอัปโหลดข้อมูลผู้ดูแลระบบ (admins)...");
+      const adminRows = admins.map((a) => ({
+        student_id: String(a.student_id || ""),
+        title: a.title || "",
+        first_name: a.first_name || "",
+        last_name: a.last_name || "",
+        name: a.name || "ผู้ดูแลระบบ",
+        email: (a.email || a.username || "").trim().toLowerCase(),
+        username: (a.username || a.email || "").trim().toLowerCase(),
+        password: String(a.password || "123456"),
+        role: a.role || "admin"
+      }));
+
+      if (adminRows.length > 0) {
+        const { error: admErr } = await client.from("admins").upsert(adminRows, { onConflict: "email" });
+        if (admErr) {
+          return {
+            success: false,
+            message: `อัปโหลดตาราง admins ไม่สำเร็จ: ${admErr.message} (กรุณาตรวจสอบว่าได้รันไฟล์ supabase_schema.sql บน Supabase SQL Editor แล้ว)`
+          };
+        }
+      }
+
+      // 2. Upsert นักเรียน 1,465 คน แบ่งเป็น Batch ละ 250 คน
+      const batchSize = 250;
+      let uploadedStudents = 0;
+      for (let i = 0; i < students.length; i += batchSize) {
+        const chunk = students.slice(i, i + batchSize).map((s) => ({
+          student_id: String(s.student_id || ""),
+          class_no: String(s.class_no || ""),
+          title: s.title || "",
+          first_name: s.first_name || "",
+          last_name: s.last_name || "",
+          name: s.name || "",
+          email: (s.email || s.username || "").trim().toLowerCase(),
+          username: (s.username || s.email || "").trim().toLowerCase(),
+          password: String(s.password || "123456"),
+          grade: s.grade || "ม.1",
+          room: String(s.room || ""),
+          role: "student",
+          status: s.status || "active",
+          pretest_completed: Boolean(s.pretest_completed),
+          posttest_completed: Boolean(s.posttest_completed)
+        }));
+
+        if (onProgress) {
+          onProgress(`⏳ กำลังอัปโหลดข้อมูลนักเรียน (${Math.min(i + chunk.length, students.length)} / ${students.length} คน)...`);
+        }
+
+        const { error: stuErr } = await client.from("students").upsert(chunk, { onConflict: "email" });
+        if (stuErr) {
+          return {
+            success: false,
+            message: `อัปโหลดตาราง students ไม่สำเร็จ: ${stuErr.message}`
+          };
+        }
+        uploadedStudents += chunk.length;
+      }
+
+      // 3. Upsert ประวัติผลสอบในเครื่อง (ถ้ามี)
+      if (localAssessments.length > 0) {
+        const assessRows = localAssessments.map((a) => this._mapAssessmentToSupabaseRow(a));
+        await client.from("assessments").upsert(assessRows, { onConflict: "test_id" });
+      }
+
+      return {
+        success: true,
+        message: `🎉 อัปโหลดข้อมูลขึ้น Supabase สำเร็จ! (นักเรียน ${uploadedStudents.toLocaleString()} คน, ผู้ดูแลระบบ ${adminRows.length} คน)`
+      };
+    } catch (err) {
+      return {
+        success: false,
+        message: `เกิดข้อผิดพลาดระหว่างอัปโหลดข้อมูลขึ้น Supabase: ${err.message}`
+      };
+    }
+  },
+
+  // ดาวน์โหลดไฟล์ SQL สำหรับนำไปรันใน Supabase SQL Editor
+  downloadSupabaseSchemaSQL() {
+    const sql = `-- ============================================================================
+-- PSU WIT IT Competency Assessment System
+-- Supabase PostgreSQL Schema, Indexes, Grants & Row-Level Security (RLS)
+-- วิธีใช้งาน: คัดลอกโค้ดทั้งหมดนี้ไปวางในเมนู "SQL Editor" บน Supabase Dashboard แล้วกด Run
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS public.students (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  student_id TEXT NOT NULL,
+  class_no TEXT DEFAULT '',
+  title TEXT DEFAULT '',
+  first_name TEXT DEFAULT '',
+  last_name TEXT DEFAULT '',
+  name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  username TEXT NOT NULL UNIQUE,
+  password TEXT NOT NULL DEFAULT '123456',
+  grade TEXT NOT NULL CHECK (grade IN ('ม.1', 'ม.2', 'ม.3', 'ม.4', 'ม.5', 'ม.6')),
+  room TEXT DEFAULT '',
+  role TEXT NOT NULL DEFAULT 'student',
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended')),
+  pretest_completed BOOLEAN NOT NULL DEFAULT FALSE,
+  posttest_completed BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_students_grade_room ON public.students (grade, room);
+CREATE INDEX IF NOT EXISTS idx_students_student_id ON public.students (student_id);
+
+CREATE TABLE IF NOT EXISTS public.assessments (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  test_id TEXT NOT NULL UNIQUE,
+  student_id TEXT NOT NULL,
+  student_name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  grade TEXT NOT NULL CHECK (grade IN ('ม.1', 'ม.2', 'ม.3', 'ม.4', 'ม.5', 'ม.6')),
+  test_type TEXT NOT NULL CHECK (test_type IN ('Pre-test', 'Post-test')),
+  score_total INTEGER NOT NULL DEFAULT 0,
+  max_score INTEGER NOT NULL DEFAULT 75,
+  score_percent INTEGER NOT NULL DEFAULT 0,
+  d1_score INTEGER NOT NULL DEFAULT 0,
+  d2_score INTEGER NOT NULL DEFAULT 0,
+  d3_score INTEGER NOT NULL DEFAULT 0,
+  d4_score INTEGER NOT NULL DEFAULT 0,
+  d5_score INTEGER NOT NULL DEFAULT 0,
+  d6_score INTEGER NOT NULL DEFAULT 0,
+  domain_scores_json JSONB DEFAULT '{}'::jsonb,
+  time_spent_seconds INTEGER NOT NULL DEFAULT 0,
+  violations_count INTEGER NOT NULL DEFAULT 0,
+  passed BOOLEAN NOT NULL DEFAULT FALSE,
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_assessments_email_grade ON public.assessments (email, grade);
+CREATE INDEX IF NOT EXISTS idx_assessments_grade ON public.assessments (grade);
+CREATE INDEX IF NOT EXISTS idx_assessments_submitted_at ON public.assessments (submitted_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.admins (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  student_id TEXT DEFAULT '',
+  title TEXT DEFAULT '',
+  first_name TEXT DEFAULT '',
+  last_name TEXT DEFAULT '',
+  name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  username TEXT NOT NULL UNIQUE,
+  password TEXT NOT NULL DEFAULT '123456',
+  role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('super_admin', 'admin')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.system_settings (
+  setting_key TEXT PRIMARY KEY,
+  setting_value TEXT DEFAULT '',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.students TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.assessments TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.admins TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.system_settings TO anon, authenticated;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
+
+ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.assessments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "psuwit_students_access" ON public.students;
+CREATE POLICY "psuwit_students_access" ON public.students
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "psuwit_assessments_access" ON public.assessments;
+CREATE POLICY "psuwit_assessments_access" ON public.assessments
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "psuwit_admins_access" ON public.admins;
+CREATE POLICY "psuwit_admins_access" ON public.admins
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "psuwit_settings_access" ON public.system_settings;
+CREATE POLICY "psuwit_settings_access" ON public.system_settings
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+INSERT INTO public.admins (student_id, title, first_name, last_name, name, email, username, password, role)
+VALUES
+  ('50015', 'นาย', 'วินัย', 'รัตนพล', 'นายวินัย รัตนพล', 'winai@psuwit.ac.th', 'winai@psuwit.ac.th', '123456', 'super_admin'),
+  ('53001', 'นางสาว', 'กนก', 'กล่อมขจิต', 'นางสาวกนก กล่อมขจิต', 'knok@psuwit.ac.th', 'knok@psuwit.ac.th', '123456', 'admin'),
+  ('1', 'นาย', 'ดูแลระบบ', 'เทพสุดสุด', 'นายดูแลระบบ เทพสุดสุด', '00001@psuwit.ac.th', '00001@psuwit.ac.th', '123456', 'super_admin')
+ON CONFLICT (email) DO NOTHING;
+`;
+
+    const blob = new Blob([sql], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "supabase_schema.sql";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  },
+
+  _mapAssessmentToSupabaseRow(record) {
+    const d = record.domain_scores || {};
+    return {
+      test_id: record.test_id,
+      student_id: String(record.student_id || ""),
+      student_name: record.student_name || "นักเรียน",
+      email: (record.email || "").trim().toLowerCase(),
+      grade: record.grade || "ม.1",
+      test_type: record.test_type || "Pre-test",
+      score_total: Number(record.score_total || 0),
+      max_score: Number(record.max_score || 75),
+      score_percent: Number(record.score_percent || 0),
+      d1_score: Number(d.D1 || 0),
+      d2_score: Number(d.D2 || 0),
+      d3_score: Number(d.D3 || 0),
+      d4_score: Number(d.D4 || 0),
+      d5_score: Number(d.D5 || 0),
+      d6_score: Number(d.D6 || 0),
+      domain_scores_json: d,
+      time_spent_seconds: Number(record.time_spent_seconds || 0),
+      violations_count: Number(record.violations_count || 0),
+      passed: Boolean(record.passed),
+      submitted_at: record.submitted_at || new Date().toISOString()
+    };
+  },
+
+  _mapSupabaseRowToAssessment(r) {
+    let domainScores = {
+      D1: Number(r.d1_score || 0),
+      D2: Number(r.d2_score || 0),
+      D3: Number(r.d3_score || 0),
+      D4: Number(r.d4_score || 0),
+      D5: Number(r.d5_score || 0),
+      D6: Number(r.d6_score || 0)
+    };
+    if (r.domain_scores_json) {
+      if (typeof r.domain_scores_json === "object") {
+        domainScores = { ...domainScores, ...r.domain_scores_json };
+      } else if (typeof r.domain_scores_json === "string") {
+        try {
+          domainScores = { ...domainScores, ...JSON.parse(r.domain_scores_json) };
+        } catch (e) {}
+      }
+    }
+    return {
+      test_id: r.test_id,
+      student_id: r.student_id,
+      student_name: r.student_name,
+      email: r.email,
+      grade: r.grade,
+      test_type: r.test_type,
+      score_total: Number(r.score_total || 0),
+      max_score: Number(r.max_score || 75),
+      score_percent: Number(r.score_percent || 0),
+      domain_scores: domainScores,
+      time_spent_seconds: Number(r.time_spent_seconds || 0),
+      violations_count: Number(r.violations_count || 0),
+      passed: Boolean(r.passed),
+      submitted_at: r.submitted_at
+    };
   },
 
   getGasUrl() {
@@ -339,7 +750,7 @@ const DB = {
     return list;
   },
 
-  // ตรวจสอบการเข้าสู่ระบบด้วย Username และ Password
+  // ตรวจสอบการเข้าสู่ระบบด้วย Username และ Password (รองรับ Supabase Cloud -> SQLite Server -> Browser DB)
   async authenticateUser(rawUsername, rawPassword, loginRole = "any") {
     const candidates = this.normalizeUsernameCandidates(rawUsername);
     const pwd = String(rawPassword ?? "");
@@ -348,7 +759,114 @@ const DB = {
       return { success: false, message: "กรุณากรอก Username และ Password ให้ครบถ้วน" };
     }
 
-    // 1. ลองตรวจสอบผ่าน Backend SQLite API ก่อน (เฉพาะเมื่อไม่ได้รันบน Static Host เช่น GitHub Pages)
+    // 1. ตรวจสอบผ่าน Supabase Cloud PostgreSQL (หากตั้งค่าเชื่อมต่อไว้)
+    if (this.hasSupabase()) {
+      const sb = this.getSupabaseClient();
+      if (sb) {
+        try {
+          const emailList = candidates.filter((c) => c.includes("@"));
+          const rawId = String(rawUsername || "").trim();
+
+          const [admByEmail, stuByEmail, stuById] = await Promise.all([
+            emailList.length > 0 ? sb.from("admins").select("*").in("email", emailList).limit(1) : Promise.resolve({ data: [] }),
+            emailList.length > 0 ? sb.from("students").select("*").in("email", emailList).limit(1) : Promise.resolve({ data: [] }),
+            !rawId.includes("@") ? sb.from("students").select("*").eq("student_id", rawId).limit(1) : Promise.resolve({ data: [] })
+          ]);
+
+          const sbAdmin = (admByEmail.data && admByEmail.data[0]) || null;
+          const sbStudent = (stuByEmail.data && stuByEmail.data[0]) || (stuById.data && stuById.data[0]) || null;
+
+          if (sbAdmin || sbStudent) {
+            if (loginRole === "admin") {
+              if (!sbAdmin) {
+                return {
+                  success: false,
+                  message: "🚫 บัญชีนี้เป็นบัญชีนักเรียน ไม่มีสิทธิ์เข้าใช้งานส่วนผู้ดูแลระบบ (Admin)"
+                };
+              }
+              if (String(sbAdmin.password || "123456") !== pwd) {
+                return { success: false, message: "❌ รหัสผ่าน (Password) ไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง" };
+              }
+              return {
+                success: true,
+                user: {
+                  student_id: sbAdmin.student_id || "",
+                  title: sbAdmin.title || "",
+                  first_name: sbAdmin.first_name || "",
+                  last_name: sbAdmin.last_name || "",
+                  name: sbAdmin.name,
+                  email: sbAdmin.email,
+                  username: sbAdmin.username || sbAdmin.email,
+                  grade: "-",
+                  room: "-",
+                  role: "admin",
+                  adminRole: sbAdmin.role || "admin",
+                  status: "active"
+                }
+              };
+            }
+
+            if (sbStudent) {
+              if (sbStudent.status === "suspended") {
+                return {
+                  success: false,
+                  message: "🚫 บัญชีของคุณถูกระงับการใช้งานชั่วคราว กรุณาติดต่อผู้ดูแลระบบ"
+                };
+              }
+              if (String(sbStudent.password || "123456") !== pwd) {
+                return { success: false, message: "❌ รหัสผ่าน (Password) ไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง" };
+              }
+              return {
+                success: true,
+                user: {
+                  student_id: sbStudent.student_id,
+                  class_no: sbStudent.class_no || "",
+                  title: sbStudent.title || "",
+                  first_name: sbStudent.first_name || "",
+                  last_name: sbStudent.last_name || "",
+                  name: sbStudent.name,
+                  email: sbStudent.email,
+                  username: sbStudent.username || sbStudent.email,
+                  grade: sbStudent.grade,
+                  room: sbStudent.room || "",
+                  role: "student",
+                  status: sbStudent.status || "active",
+                  pretest_completed: Boolean(sbStudent.pretest_completed),
+                  posttest_completed: Boolean(sbStudent.posttest_completed)
+                }
+              };
+            }
+
+            if (sbAdmin) {
+              if (String(sbAdmin.password || "123456") !== pwd) {
+                return { success: false, message: "❌ รหัสผ่าน (Password) ไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง" };
+              }
+              return {
+                success: true,
+                user: {
+                  student_id: sbAdmin.student_id || "",
+                  title: sbAdmin.title || "",
+                  first_name: sbAdmin.first_name || "",
+                  last_name: sbAdmin.last_name || "",
+                  name: sbAdmin.name,
+                  email: sbAdmin.email,
+                  username: sbAdmin.username || sbAdmin.email,
+                  grade: "-",
+                  room: "-",
+                  role: "admin",
+                  adminRole: sbAdmin.role || "admin",
+                  status: "active"
+                }
+              };
+            }
+          }
+        } catch (e) {
+          // หาก Supabase ยังไม่ได้สร้างตารางหรือออฟไลน์ ให้ fallback ลงมาเช็คในเครื่องต่อได้โดยไม่พัง
+        }
+      }
+    }
+
+    // 2. ลองตรวจสอบผ่าน Backend SQLite API (เฉพาะเมื่อไม่ได้รันบน Static Host เช่น GitHub Pages)
     if (this.canUseServer()) {
       try {
         const res = await fetch("/api/auth/login", {
@@ -373,7 +891,7 @@ const DB = {
       }
     }
 
-    // 2. ตรวจสอบจากฐานข้อมูลในเบราว์เซอร์ (LocalStorage / Seed user.xlsx) ทันทีโดยไม่ค้าง
+    // 3. ตรวจสอบจากฐานข้อมูลในเบราว์เซอร์ (LocalStorage / Seed user.xlsx) ทันทีโดยไม่ค้าง
     const admins = this.getLocalAdminsSync();
     const students = this.getLocalStudentsSync();
 
@@ -498,7 +1016,58 @@ const DB = {
     let apiSuccess = false;
     let apiMessage = "";
 
-    // 1. ส่งคำขอเปลี่ยนรหัสผ่านไปยัง SQLite Backend API (ถ้ามี Server)
+    // 1. อัปเดตรหัสผ่านบน Supabase Cloud PostgreSQL (หากเชื่อมต่อไว้)
+    if (this.hasSupabase()) {
+      const sb = this.getSupabaseClient();
+      if (sb) {
+        try {
+          const emailList = candidates.filter((c) => c.includes("@"));
+          const rawId = String(rawUsername || "").trim();
+          const [stuRes, admRes] = await Promise.all([
+            emailList.length > 0 ? sb.from("students").select("*").in("email", emailList).limit(1) : Promise.resolve({ data: [] }),
+            emailList.length > 0 ? sb.from("admins").select("*").in("email", emailList).limit(1) : Promise.resolve({ data: [] })
+          ]);
+          let sbStu = (stuRes.data && stuRes.data[0]) || null;
+          if (!sbStu && !rawId.includes("@")) {
+            const byId = await sb.from("students").select("*").eq("student_id", rawId).limit(1);
+            sbStu = (byId.data && byId.data[0]) || null;
+          }
+          const sbAdm = (admRes.data && admRes.data[0]) || null;
+
+          if (sbStu) {
+            if (!isAdminReset && String(sbStu.password || "123456") !== curPwd) {
+              return { success: false, message: "❌ รหัสผ่านปัจจุบันไม่ถูกต้อง" };
+            }
+            const { error: uErr } = await sb
+              .from("students")
+              .update({ password: nextPwd, updated_at: new Date().toISOString() })
+              .eq("email", sbStu.email);
+            if (!uErr) {
+              apiHandled = true;
+              apiSuccess = true;
+              apiMessage = "✅ เปลี่ยนรหัสผ่านบนฐานข้อมูลออนไลน์ (Supabase) สำเร็จเรียบร้อยแล้ว!";
+            }
+          }
+
+          if (sbAdm) {
+            if (!apiHandled && !isAdminReset && String(sbAdm.password || "123456") !== curPwd) {
+              return { success: false, message: "❌ รหัสผ่านปัจจุบันไม่ถูกต้อง" };
+            }
+            const { error: aErr } = await sb
+              .from("admins")
+              .update({ password: nextPwd, updated_at: new Date().toISOString() })
+              .eq("email", sbAdm.email);
+            if (!aErr) {
+              apiHandled = true;
+              apiSuccess = true;
+              apiMessage = "✅ เปลี่ยนรหัสผ่านบนฐานข้อมูลออนไลน์ (Supabase) สำเร็จเรียบร้อยแล้ว!";
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
+    // 2. ส่งคำขอเปลี่ยนรหัสผ่านไปยัง SQLite Backend API (ถ้ามี Server)
     if (this.canUseServer()) {
       try {
         const res = await fetch("/api/auth/change-password", {
@@ -528,7 +1097,7 @@ const DB = {
       }
     }
 
-    // 2. อัปเดตใน LocalStorage และ IndexedDB ให้ตรงกันเสมอ
+    // 3. อัปเดตใน LocalStorage และ IndexedDB ให้ตรงกันเสมอ
     let updatedLocal = false;
     const students = this.getLocalStudentsSync();
     const sIdx = students.findIndex((s) => {
@@ -576,8 +1145,34 @@ const DB = {
     };
   },
 
-  // ตรวจสอบสถานะฐานข้อมูลทั้งหมด (SQLite Backend + IndexedDB)
+  // ตรวจสอบสถานะฐานข้อมูลทั้งหมด (Supabase Cloud -> SQLite Backend -> IndexedDB)
   async getDatabaseStatus() {
+    if (this.hasSupabase()) {
+      const sb = this.getSupabaseClient();
+      const cfg = this.getSupabaseConfig();
+      if (sb) {
+        try {
+          const [stuRes, assRes] = await Promise.all([
+            sb.from("students").select("email", { count: "exact", head: true }),
+            sb.from("assessments").select("test_id", { count: "exact", head: true })
+          ]);
+          if (!stuRes.error) {
+            return {
+              connected: true,
+              mode: "supabase_cloud",
+              engine: "Supabase PostgreSQL (Cloud Database)",
+              file: cfg.url,
+              fileSize: 0,
+              tables: {
+                students: stuRes.count || 0,
+                assessments: assRes.count || 0
+              }
+            };
+          }
+        } catch (e) {}
+      }
+    }
+
     if (this.canUseServer()) {
       try {
         const res = await fetch("/api/status", { method: "GET" });
@@ -656,6 +1251,20 @@ const DB = {
 
   // ดึงรายชื่อผู้ดูแลระบบทั้งหมด
   async getAdmins() {
+    if (this.hasSupabase()) {
+      const sb = this.getSupabaseClient();
+      if (sb) {
+        try {
+          const { data, error } = await sb.from("admins").select("*").order("id", { ascending: true });
+          if (!error && Array.isArray(data) && data.length > 0) {
+            localStorage.setItem(APP_CONFIG.storageKeys.admins, JSON.stringify(data));
+            IDBEngine.putBulk("admins", data);
+            return data;
+          }
+        } catch (e) {}
+      }
+    }
+
     if (this.canUseServer()) {
       try {
         const res = await fetch("/api/admins");
@@ -709,6 +1318,30 @@ const DB = {
       created_at: adminData.created_at || new Date().toISOString()
     };
 
+    if (this.hasSupabase()) {
+      const sb = this.getSupabaseClient();
+      if (sb) {
+        try {
+          await sb.from("admins").upsert(
+            [
+              {
+                student_id: record.student_id,
+                title: record.title,
+                first_name: record.first_name,
+                last_name: record.last_name,
+                name: record.name,
+                email: record.email,
+                username: record.username,
+                password: record.password,
+                role: record.role
+              }
+            ],
+            { onConflict: "email" }
+          );
+        } catch (e) {}
+      }
+    }
+
     if (this.canUseServer()) {
       try {
         await fetch("/api/admins", {
@@ -740,6 +1373,15 @@ const DB = {
       throw new Error("ไม่สามารถลบผู้ดูแลระบบหลัก (winai@psuwit.ac.th) ได้");
     }
 
+    if (this.hasSupabase()) {
+      const sb = this.getSupabaseClient();
+      if (sb) {
+        try {
+          await sb.from("admins").delete().eq("email", cleanEmail);
+        } catch (e) {}
+      }
+    }
+
     if (this.canUseServer()) {
       try {
         await fetch(`/api/admins?email=${encodeURIComponent(cleanEmail)}`, { method: "DELETE" });
@@ -754,8 +1396,28 @@ const DB = {
     return true;
   },
 
-  // ดึงรายชื่อนักเรียนทั้งหมด
+  // ดึงรายชื่อนักเรียนทั้งหมด (รองรับมากกว่า 1,000 แถวบน Supabase PostgREST)
   async getStudents() {
+    if (this.hasSupabase()) {
+      const sb = this.getSupabaseClient();
+      if (sb) {
+        try {
+          const [page1, page2] = await Promise.all([
+            sb.from("students").select("*").order("grade", { ascending: true }).order("student_id", { ascending: true }).range(0, 999),
+            sb.from("students").select("*").order("grade", { ascending: true }).order("student_id", { ascending: true }).range(1000, 2999)
+          ]);
+          if (!page1.error && Array.isArray(page1.data)) {
+            const combined = [...page1.data, ...(Array.isArray(page2.data) ? page2.data : [])];
+            if (combined.length > 0) {
+              localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(combined));
+              IDBEngine.putBulk("students", combined);
+              return combined;
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
     if (this.canUseServer()) {
       try {
         const res = await fetch("/api/students");
@@ -849,6 +1511,37 @@ const DB = {
       created_at: (existing && existing.created_at) || studentData.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
+
+    if (this.hasSupabase()) {
+      const sb = this.getSupabaseClient();
+      if (sb) {
+        try {
+          await sb.from("students").upsert(
+            [
+              {
+                student_id: String(record.student_id || ""),
+                class_no: String(record.class_no || ""),
+                title: record.title || "",
+                first_name: record.first_name || "",
+                last_name: record.last_name || "",
+                name: record.name || "",
+                email: record.email,
+                username: record.username,
+                password: String(record.password || "123456"),
+                grade: record.grade,
+                room: String(record.room || ""),
+                role: "student",
+                status: record.status || "active",
+                pretest_completed: Boolean(record.pretest_completed),
+                posttest_completed: Boolean(record.posttest_completed),
+                updated_at: record.updated_at
+              }
+            ],
+            { onConflict: "email" }
+          );
+        } catch (e) {}
+      }
+    }
 
     if (this.canUseServer()) {
       try {
@@ -978,6 +1671,37 @@ const DB = {
     if (updatedStudents.length > 0) {
       localStorage.setItem(APP_CONFIG.storageKeys.students, JSON.stringify(students));
       IDBEngine.putBulk("students", updatedStudents);
+
+      // ซิงก์การเลื่อนระดับชั้นแบบกลุ่มขึ้นสู่ Supabase Cloud PostgreSQL
+      if (this.hasSupabase()) {
+        const sb = this.getSupabaseClient();
+        if (sb) {
+          try {
+            const batchSize = 250;
+            for (let i = 0; i < updatedStudents.length; i += batchSize) {
+              const chunk = updatedStudents.slice(i, i + batchSize).map((s) => ({
+                student_id: String(s.student_id || ""),
+                class_no: String(s.class_no || ""),
+                title: s.title || "",
+                first_name: s.first_name || "",
+                last_name: s.last_name || "",
+                name: s.name || "",
+                email: (s.email || s.username || "").trim().toLowerCase(),
+                username: (s.username || s.email || "").trim().toLowerCase(),
+                password: String(s.password || "123456"),
+                grade: s.grade,
+                room: String(s.room || ""),
+                role: "student",
+                status: s.status || "active",
+                pretest_completed: Boolean(s.pretest_completed),
+                posttest_completed: Boolean(s.posttest_completed),
+                updated_at: nowIso
+              }));
+              await sb.from("students").upsert(chunk, { onConflict: "email" });
+            }
+          } catch (e) {}
+        }
+      }
     }
 
     return {
@@ -989,6 +1713,15 @@ const DB = {
   // ลบนักเรียน
   async deleteStudent(email) {
     const cleanEmail = (email || "").trim().toLowerCase();
+
+    if (this.hasSupabase()) {
+      const sb = this.getSupabaseClient();
+      if (sb) {
+        try {
+          await sb.from("students").delete().eq("email", cleanEmail);
+        } catch (e) {}
+      }
+    }
 
     if (this.canUseServer()) {
       try {
@@ -1017,6 +1750,18 @@ const DB = {
   // รีเซ็ตสิทธิ์การทำแบบทดสอบให้นักเรียน
   async resetAttempts(email) {
     const cleanEmail = (email || "").trim().toLowerCase();
+
+    if (this.hasSupabase()) {
+      const sb = this.getSupabaseClient();
+      if (sb) {
+        try {
+          await sb
+            .from("students")
+            .update({ pretest_completed: false, posttest_completed: false, updated_at: new Date().toISOString() })
+            .eq("email", cleanEmail);
+        } catch (e) {}
+      }
+    }
 
     if (this.canUseServer()) {
       try {
@@ -1053,6 +1798,27 @@ const DB = {
   // ดึงผลการสอบทั้งหมด (สามารถกรองตามระดับชั้น)
   async getAssessments(gradeFilter = "all") {
     let assessments = [];
+
+    if (this.hasSupabase()) {
+      const sb = this.getSupabaseClient();
+      if (sb) {
+        try {
+          let query = sb.from("assessments").select("*").order("submitted_at", { ascending: false }).range(0, 4999);
+          if (gradeFilter && gradeFilter !== "all") {
+            query = query.eq("grade", gradeFilter);
+          }
+          const { data, error } = await query;
+          if (!error && Array.isArray(data)) {
+            assessments = data.map((r) => this._mapSupabaseRowToAssessment(r));
+            if (gradeFilter === "all") {
+              localStorage.setItem(APP_CONFIG.storageKeys.assessments, JSON.stringify(assessments));
+              IDBEngine.putBulk("assessments", assessments);
+            }
+            return assessments;
+          }
+        } catch (e) {}
+      }
+    }
 
     if (this.canUseServer()) {
       try {
@@ -1121,6 +1887,21 @@ const DB = {
       email: cleanEmail,
       submitted_at: resultData.submitted_at || new Date().toISOString()
     };
+
+    if (this.hasSupabase()) {
+      const sb = this.getSupabaseClient();
+      if (sb) {
+        try {
+          const sbRow = this._mapAssessmentToSupabaseRow(record);
+          await sb.from("assessments").upsert([sbRow], { onConflict: "test_id" });
+          const updateFields =
+            record.test_type === "Pre-test"
+              ? { pretest_completed: true, updated_at: new Date().toISOString() }
+              : { posttest_completed: true, updated_at: new Date().toISOString() };
+          await sb.from("students").update(updateFields).eq("email", cleanEmail);
+        } catch (e) {}
+      }
+    }
 
     if (this.canUseServer()) {
       try {

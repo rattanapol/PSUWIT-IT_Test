@@ -13,6 +13,12 @@ const APP_CONFIG = {
   // ตัวอย่าง: "1234567890-abcdefg.apps.googleusercontent.com"
   googleClientId: "",
 
+  // การตั้งค่าฐานข้อมูลออนไลน์ Supabase (PostgreSQL Cloud Database)
+  // สามารถกรอกค่าไว้ที่นี่เพื่อให้ทุกเครื่องที่เข้าเว็บ (เช่น บน GitHub Pages) เชื่อมต่อ Supabase อัตโนมัติ
+  // หรือตั้งค่าผ่านหน้าผู้ดูแลระบบ -> แท็บ "🗄️ จัดการฐานข้อมูล (Database)" ได้ตลอดเวลา
+  supabaseUrl: "",       // ตัวอย่าง: "https://xxxxxxxxxxxx.supabase.co"
+  supabaseAnonKey: "",   // ตัวอย่าง: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." หรือ "sb_publishable_..."
+
   // รูปแบบอีเมลองค์กรของนักเรียน: รหัสนักเรียน 4 หลัก@psuwit.ac.th (หรืออีเมลองค์กร @psuwit.ac.th)
   studentSsoRegex: /^[0-9]{4}@psuwit\.ac\.th$/i,
   orgEmailRegex: /^[a-zA-Z0-9._%+-]+@psuwit\.ac\.th$/i,
@@ -30,6 +36,8 @@ const APP_CONFIG = {
 
   // คีย์สำหรับบันทึกลง LocalStorage
   storageKeys: {
+    supabaseUrl: "psu_wit_supabase_url",
+    supabaseAnonKey: "psu_wit_supabase_anon_key",
     gasUrl: "psu_wit_gas_webapp_url",
     googleClientId: "psu_wit_google_client_id",
     strictFourDigitId: "psu_wit_strict_4digit_id",

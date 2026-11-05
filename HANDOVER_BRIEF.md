@@ -104,7 +104,17 @@ d:\Test/
 
 ---
 
-## 6. วิธีเริ่มต้นทำงานต่อในแชทใหม่ (Quick Start for Next Session)
+## 6. การเชื่อมต่อฐานข้อมูลออนไลน์ Supabase (PostgreSQL Cloud Database)
+ระบบรองรับการทำงานร่วมกับ **Supabase PostgreSQL** โดยตรงผ่าน `@supabase/supabase-js@2` ทำให้เมื่อเปิดใช้งานบน **GitHub Pages** หรือทุกอุปกรณ์ นักเรียนและผู้ดูแลระบบสามารถใช้ฐานข้อมูลออนไลน์ชุดเดียวกันแบบ Real-time:
+1. **สคริปต์สร้างตาราง (`database/supabase_schema.sql`)**:
+   - สร้างตาราง `public.students`, `public.assessments`, `public.admins`, และ `public.system_settings` พร้อม Indexes, Grants (`anon`, `authenticated`), และ Row-Level Security (RLS) Policies
+2. **การตั้งค่าใช้งาน**:
+   - **วิธีที่ 1 (ผ่านหน้าเว็บ Admin)**: เข้าหน้าผู้ดูแลระบบ -> แท็บ **🗄️ จัดการฐานข้อมูล (Database)** -> การ์ด **⚡ เชื่อมต่อฐานข้อมูลออนไลน์ Supabase** กรอก `Supabase Project URL` และ `Supabase Anon / Publishable Key` แล้วกดบันทึก และกดปุ่ม **🚀 อัปโหลดรายชื่อ 1,468 คน (user.xlsx) ขึ้น Supabase**
+   - **วิธีที่ 2 (ตั้งค่าถาวรสำหรับทุกเครื่องบน GitHub Pages)**: ใส่ค่า `supabaseUrl` และ `supabaseAnonKey` ในไฟล์ `js/config.js`
+
+---
+
+## 7. วิธีเริ่มต้นทำงานต่อในแชทใหม่ (Quick Start for Next Session)
 1. การรันเซิร์ฟเวอร์ในเครื่อง:
    ```bash
    node server.js

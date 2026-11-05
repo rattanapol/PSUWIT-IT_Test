@@ -133,6 +133,27 @@ const AdminController = {
       btnResetSeed.addEventListener("click", () => this.handleResetSeedDatabase());
     }
 
+    // การเชื่อมต่อฐานข้อมูลออนไลน์ Supabase (PostgreSQL Cloud)
+    const btnTestSupabase = document.getElementById("btnTestSupabase");
+    if (btnTestSupabase) {
+      btnTestSupabase.addEventListener("click", () => this.handleTestSupabaseConnection());
+    }
+
+    const btnSaveSupabase = document.getElementById("btnSaveSupabase");
+    if (btnSaveSupabase) {
+      btnSaveSupabase.addEventListener("click", () => this.handleSaveSupabaseConfig());
+    }
+
+    const btnSyncSeedSupabase = document.getElementById("btnSyncSeedSupabase");
+    if (btnSyncSeedSupabase) {
+      btnSyncSeedSupabase.addEventListener("click", () => this.handleSyncSeedToSupabase());
+    }
+
+    const btnDownloadSupabaseSql = document.getElementById("btnDownloadSupabaseSql");
+    if (btnDownloadSupabaseSql) {
+      btnDownloadSupabaseSql.addEventListener("click", () => DB.downloadSupabaseSchemaSQL());
+    }
+
     // การเชื่อมต่อ External Cloud / Google Sheets
     const gasTestBtn = document.getElementById("btnTestGas");
     if (gasTestBtn) {
@@ -856,11 +877,27 @@ const AdminController = {
     }
   },
 
-  // 4. หน้าจัดการฐานข้อมูล (Database System & Cloud Sync)
+  // 4. หน้าจัดการฐานข้อมูล (Database System, Supabase Cloud & Cloud Sync)
   async renderSettings() {
     const input = document.getElementById("settingsGasUrl");
     if (input) {
       input.value = DB.getGasUrl();
+    }
+
+    const sbCfg = DB.getSupabaseConfig();
+    const sbUrlInput = document.getElementById("settingsSupabaseUrl");
+    const sbKeyInput = document.getElementById("settingsSupabaseKey");
+    const sbBadge = document.getElementById("supabaseConnBadge");
+    if (sbUrlInput) sbUrlInput.value = sbCfg.url || "";
+    if (sbKeyInput) sbKeyInput.value = sbCfg.anonKey || "";
+    if (sbBadge) {
+      if (DB.hasSupabase()) {
+        sbBadge.textContent = "เชื่อมต่อ Supabase แล้ว";
+        sbBadge.className = "badge badge-success";
+      } else {
+        sbBadge.textContent = "ยังไม่ได้ตั้งค่า";
+        sbBadge.className = "badge badge-secondary";
+      }
     }
 
     const dbStatus = await DB.getDatabaseStatus();
@@ -875,9 +912,97 @@ const AdminController = {
     if (elStudentsCount) elStudentsCount.textContent = `${dbStatus.tables.students.toLocaleString()} รายการ`;
     if (elAssessmentsCount) elAssessmentsCount.textContent = `${dbStatus.tables.assessments.toLocaleString()} รายการ`;
     if (elBadge) {
-      elBadge.textContent = dbStatus.mode === "server_sqlite"
-        ? "SQLite Server Active"
-        : "IndexedDB Browser Active";
+      if (dbStatus.mode === "supabase_cloud") {
+        elBadge.textContent = "Supabase Cloud Active";
+      } else if (dbStatus.mode === "server_sqlite") {
+        elBadge.textContent = "SQLite Server Active";
+      } else {
+        elBadge.textContent = "IndexedDB Browser Active";
+      }
+    }
+  },
+
+  async handleTestSupabaseConnection() {
+    const url = document.getElementById("settingsSupabaseUrl")?.value.trim() || "";
+    const key = document.getElementById("settingsSupabaseKey")?.value.trim() || "";
+    const statusEl = document.getElementById("supabaseStatusFeedback");
+
+    if (statusEl) {
+      statusEl.textContent = "⏳ กำลังทดสอบการเชื่อมต่อ Supabase PostgreSQL...";
+      statusEl.className = "mt-1 mb-3 text-sm text-indigo-600 font-semibold";
+    }
+
+    const res = await DB.testSupabaseConnection(url, key);
+    if (statusEl) {
+      statusEl.textContent = res.success ? `✅ ${res.message}` : `❌ ${res.message}`;
+      statusEl.className = `mt-1 mb-3 text-sm font-semibold ${res.success ? "text-emerald-600" : "text-red-600"}`;
+    }
+  },
+
+  async handleSaveSupabaseConfig() {
+    const url = document.getElementById("settingsSupabaseUrl")?.value.trim() || "";
+    const key = document.getElementById("settingsSupabaseKey")?.value.trim() || "";
+    const statusEl = document.getElementById("supabaseStatusFeedback");
+
+    DB.setSupabaseConfig(url, key);
+
+    if (!url || !key) {
+      await this.refreshData();
+      if (statusEl) {
+        statusEl.textContent = "ℹ️ ล้างการตั้งค่า Supabase แล้ว (ระบบใช้ฐานข้อมูลในเครื่องแทน)";
+        statusEl.className = "mt-1 mb-3 text-sm text-slate-600 font-semibold";
+      }
+      return;
+    }
+
+    const testRes = await DB.testSupabaseConnection(url, key);
+    await this.refreshData();
+
+    if (statusEl) {
+      statusEl.textContent = testRes.success ? `✅ บันทึกสำเร็จ! ${testRes.message}` : `⚠️ บันทึกค่าแล้ว: ${testRes.message}`;
+      statusEl.className = `mt-1 mb-3 text-sm font-semibold ${testRes.success ? "text-emerald-600" : "text-amber-600"}`;
+    }
+  },
+
+  async handleSyncSeedToSupabase() {
+    const url = document.getElementById("settingsSupabaseUrl")?.value.trim() || "";
+    const key = document.getElementById("settingsSupabaseKey")?.value.trim() || "";
+    const statusEl = document.getElementById("supabaseStatusFeedback");
+
+    if (url && key) {
+      DB.setSupabaseConfig(url, key);
+    }
+
+    if (!DB.hasSupabase()) {
+      alert("⚠️ กรุณากรอก Supabase Project URL และ Supabase Anon Key ก่อนอัปโหลดข้อมูล");
+      return;
+    }
+
+    if (
+      !confirm(
+        "🚀 ยืนยันการอัปโหลดข้อมูลผู้ใช้งานทั้งหมด (นักเรียน 1,465 คน + ผู้ดูแลระบบ 3 คน จาก user.xlsx) ขึ้นสู่ฐานข้อมูล Supabase PostgreSQL หรือไม่?\n\nหมายเหตุ: ต้องรันไฟล์ supabase_schema.sql ใน SQL Editor ของ Supabase ก่อน"
+      )
+    ) {
+      return;
+    }
+
+    const res = await DB.syncSeedToSupabase((progressMsg) => {
+      if (statusEl) {
+        statusEl.textContent = progressMsg;
+        statusEl.className = "mt-1 mb-3 text-sm text-indigo-600 font-semibold";
+      }
+    });
+
+    if (statusEl) {
+      statusEl.textContent = res.success ? `✅ ${res.message}` : `❌ ${res.message}`;
+      statusEl.className = `mt-1 mb-3 text-sm font-semibold ${res.success ? "text-emerald-600" : "text-red-600"}`;
+    }
+
+    if (res.success) {
+      await this.refreshData();
+      alert(res.message);
+    } else {
+      alert("❌ " + res.message);
     }
   },
 
