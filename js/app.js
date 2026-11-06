@@ -609,12 +609,18 @@ const App = {
   },
 
   // เริ่มต้นเข้าสู่ห้องสอบ
-  startAssessment(testType) {
+  async startAssessment(testType) {
     if (!this.currentUser) return;
 
-    if (!confirm(`คุณกำลังจะเริ่มทำแบบทดสอบ ${testType} สำหรับระดับชั้น ${this.currentUser.grade}\n\n⚠️ กฎการสอบสำคัญ:\n1. มีการจับเวลา 15 นาที (จำนวน 15 ข้อ คะแนนเต็ม 75 คะแนน)\n2. ห้ามสลับหน้าต่างหรือแท็บเบราว์เซอร์เด็ดขาด (เตือนได้สูงสุด 3 ครั้ง)\n3. ข้อสอบและตัวเลือกจะถูกสลับลำดับอัตโนมัติ\n\nพร้อมแล้วกด ตกลง เพื่อเริ่มสอบ`)) {
+    if (!confirm(`คุณกำลังจะเริ่มทำแบบทดสอบ ${testType} สำหรับระดับชั้น ${this.currentUser.grade}\n\n🔒 โหมดล็อกหน้าจอสอบเข้มงวด (Strict Exam Lockdown):\n1. ระบบจะบังคับใช้โหมดเต็มหน้าจอ (Fullscreen) และบล็อกการสลับหน้าต่างทันที\n2. ห้ามสลับหน้าจอ, ห้ามเปิดแท็บอื่น, ห้ามเปิดโปรแกรมอื่นเด็ดขาด\n3. หากหลุดออกจากหน้าจอสอบ หรือสลับโปรแกรม ระบบจะขึ้นม่านล็อกหน้าจอฉุกเฉินและส่งเสียงเตือนทันที\n4. มีเวลาทำแบบทดสอบ 15 นาที (จำนวน 15 ข้อ คะแนนเต็ม 75 คะแนน)\n\nพร้อมแล้วกด ตกลง เพื่อเริ่มสอบและล็อกหน้าจอ`)) {
       return;
     }
+
+    // ล็อกหน้าจอทันที
+    document.body.classList.add("exam-lockdown-active");
+    document.body.classList.remove("exam-blurred");
+    const overlay = document.getElementById("examLockdownOverlay");
+    if (overlay) overlay.classList.add("hidden");
 
     this.currentSession = new AssessmentSession({
       student: this.currentUser,
@@ -637,6 +643,7 @@ const App = {
         }
       },
       onViolation: (data) => {
+        // 1. อัปเดตแถบแจ้งเตือนด้านบน
         const violationBanner = document.getElementById("examViolationBanner");
         if (violationBanner) {
           violationBanner.classList.remove("hidden");
@@ -651,6 +658,16 @@ const App = {
             violationBanner.style.animation = "pulse 1s infinite";
           }, 10);
         }
+
+        // 2. แสดงม่านบล็อกหน้าจอแบบเบ็ดเสร็จ (Lockdown Curtain Overlay)
+        const overlay = document.getElementById("examLockdownOverlay");
+        const pill = document.getElementById("lockdownViolationPill");
+        const reasonText = document.getElementById("lockdownViolationReason");
+        if (overlay) {
+          if (pill) pill.textContent = `ครั้งที่ ${data.violationsCount} / ${data.maxViolations}`;
+          if (reasonText) reasonText.textContent = data.reason;
+          overlay.classList.remove("hidden");
+        }
       },
       onSubmit: async (result) => {
         await this.handleAssessmentSubmission(result);
@@ -659,11 +676,21 @@ const App = {
 
     this.switchView("view-assessment");
     this.renderAssessmentView();
-    setTimeout(() => {
-      if (this.currentSession && !this.currentSession.isSubmitted) {
-        this.currentSession.start();
-      }
-    }, 600);
+
+    // เริ่มต้นและร้องขอ Fullscreen ใน context ของ user click ทันที
+    try {
+      await this.currentSession.start();
+    } catch (err) {
+      console.warn("Session start error:", err);
+    }
+  },
+
+  // ปลดล็อกหน้าจอและกลับเข้าสู่โหมดเต็มหน้าจอ
+  async resumeExamFullscreen() {
+    if (this.currentSession && !this.currentSession.isSubmitted) {
+      await this.currentSession.requestExamFullscreen();
+      this.currentSession.resolveLockdown();
+    }
   },
 
   // เรนเดอร์หน้าจอทำข้อสอบ
@@ -765,6 +792,12 @@ const App = {
 
   // เมื่อส่งแบบทดสอบสำเร็จ
   async handleAssessmentSubmission(result) {
+    // ปลดล็อกหน้าจอและม่านฉุกเฉิน
+    document.body.classList.remove("exam-lockdown-active");
+    document.body.classList.remove("exam-blurred");
+    const overlay = document.getElementById("examLockdownOverlay");
+    if (overlay) overlay.classList.add("hidden");
+
     const saved = await DB.saveAssessment(result);
     this.currentResult = saved;
 

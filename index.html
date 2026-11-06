@@ -13,7 +13,7 @@
     href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💻</text></svg>">
 
   <!-- Main Stylesheet -->
-  <link rel="stylesheet" href="css/main.css?v=5">
+  <link rel="stylesheet" href="css/main.css?v=6">
 
   <!-- Chart.js CDN for Spider Radar Charts -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -1058,16 +1058,50 @@
     <div class="modal-content" style="max-width: 720px;" id="assessmentDetailModalContent"></div>
   </div>
 
+  <!-- ============================================================== -->
+  <!-- STRICT EXAM LOCKDOWN OVERLAY (ม่านล็อกหน้าจอฉุกเฉิน 100%)       -->
+  <!-- ============================================================== -->
+  <div id="examLockdownOverlay" class="lockdown-overlay hidden">
+    <div class="lockdown-box">
+      <div class="lockdown-icon">🔒</div>
+      <div class="lockdown-badge">STRICT EXAM LOCKDOWN ACTIVATED</div>
+      <h2 class="lockdown-title">หน้าจอแบบทดสอบถูกบล็อกทันที!</h2>
+      <p class="lockdown-desc">
+        ระบบตรวจพบว่าคุณ<strong>สลับหน้าต่าง ออกจากโหมดเต็มหน้าจอ หรือเปิดโปรแกรมอื่น</strong><br>
+        ระบบไม่อนุญาตให้เปิดหน้าต่างอื่น หรือสลับหน้าจอขณะทำแบบทดสอบโดยเด็ดขาด
+      </p>
+
+      <div class="lockdown-warning-card">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-semibold text-rose-200">ประวัติการตรวจพบความผิดปกติ:</span>
+          <span id="lockdownViolationPill" class="badge badge-fail font-bold">ครั้งที่ 1 / 3</span>
+        </div>
+        <div id="lockdownViolationReason" class="text-xs text-rose-100 font-medium">
+          ตรวจพบการสลับหน้าต่าง หรือหลุดออกจากโหมดเต็มหน้าจอ
+        </div>
+        <div class="text-[11px] text-rose-300 mt-2">
+          * พฤติกรรมนี้ถูกบันทึกส่งอาจารย์ผู้คุมสอบ หากครบกำหนด ระบบจะส่งข้อสอบและยุติการสอบทันที
+        </div>
+      </div>
+
+      <div class="lockdown-actions">
+        <button id="btnResumeExamLockdown" type="button" class="btn btn-lockdown-resume" onclick="App.resumeExamFullscreen()">
+          🛡️ คลิกที่นี่เพื่อกลับเข้าสู่โหมดเต็มหน้าจอและสอบต่อ
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Application Scripts in Order -->
-  <script src="js/config.js?v=5"></script>
-  <script src="js/questions.js?v=5"></script>
-  <script src="js/users_data.js?v=5"></script>
-  <script src="js/storage.js?v=5"></script>
-  <script src="js/charts.js?v=5"></script>
-  <script src="js/certificate.js?v=5"></script>
-  <script src="js/assessment.js?v=5"></script>
-  <script src="js/admin.js?v=5"></script>
-  <script src="js/app.js?v=5"></script>
+  <script src="js/config.js?v=6"></script>
+  <script src="js/questions.js?v=6"></script>
+  <script src="js/users_data.js?v=6"></script>
+  <script src="js/storage.js?v=6"></script>
+  <script src="js/charts.js?v=6"></script>
+  <script src="js/certificate.js?v=6"></script>
+  <script src="js/assessment.js?v=6"></script>
+  <script src="js/admin.js?v=6"></script>
+  <script src="js/app.js?v=6"></script>
 
 </body>
 
