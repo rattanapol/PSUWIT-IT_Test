@@ -96,18 +96,30 @@ const App = {
     const submitBtn = document.getElementById("btnSubmitAssessment");
     if (submitBtn) {
       submitBtn.addEventListener("click", () => {
+        if (!this.currentSession || this.currentSession.isSubmitted) return;
+
         const answered = this.currentSession.getAnsweredCount();
         const total = this.currentSession.getTotalQuestions();
-        if (answered < total) {
-          if (!confirm(`คุณตอบไปแล้ว ${answered}/${total} ข้อ ยังมีข้อที่ยังไม่ได้ตอบ ต้องการยืนยันส่งข้อสอบหรือไม่?`)) {
-            return;
+
+        this.currentSession._isShowingDialog = true;
+        let confirmed = false;
+        try {
+          if (answered < total) {
+            confirmed = confirm(`คุณตอบไปแล้ว ${answered}/${total} ข้อ ยังมีข้อที่ยังไม่ได้ตอบ ต้องการยืนยันส่งข้อสอบหรือไม่?`);
+          } else {
+            confirmed = confirm("คุณต้องการส่งแบบทดสอบเพื่อบันทึกผลและดูคะแนนใช่หรือไม่?");
           }
-        } else {
-          if (!confirm("คุณต้องการส่งแบบทดสอบเพื่อบันทึกผลและดูคะแนนใช่หรือไม่?")) {
-            return;
-          }
+        } finally {
+          setTimeout(() => {
+            if (this.currentSession) {
+              this.currentSession._isShowingDialog = false;
+            }
+          }, 600);
         }
-        this.currentSession.submit();
+
+        if (confirmed) {
+          this.currentSession.submit();
+        }
       });
     }
 
@@ -792,33 +804,70 @@ const App = {
 
   // เมื่อส่งแบบทดสอบสำเร็จ
   async handleAssessmentSubmission(result) {
-    // ปลดล็อกหน้าจอและม่านฉุกเฉิน
-    document.body.classList.remove("exam-lockdown-active");
-    document.body.classList.remove("exam-blurred");
-    const overlay = document.getElementById("examLockdownOverlay");
-    if (overlay) overlay.classList.add("hidden");
+    try {
+      // 1. ปลดล็อกหน้าจอและปิดม่านฉุกเฉินทันที
+      document.body.classList.remove("exam-lockdown-active");
+      document.body.classList.remove("exam-blurred");
+      const overlay = document.getElementById("examLockdownOverlay");
+      if (overlay) overlay.classList.add("hidden");
 
-    const saved = await DB.saveAssessment(result);
-    this.currentResult = saved;
+      // 2. สลับไปหน้ารายงานผลทันที (Instant Transition) ไม่ต้องรอเน็ตเวิร์ก
+      this.currentResult = result;
+      this.switchView("view-results");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      this.renderResultsView(result, null);
 
-    const history = await DB.getStudentHistory(this.currentUser.email || this.currentUser.username);
-    this._cachedStudentHistory = history;
-    const otherTest = history.find((h) => h.grade === saved.grade && h.test_id !== saved.test_id);
+      // 3. บันทึกผลสอบเข้าฐานข้อมูล (Supabase + LocalStorage)
+      let saved = result;
+      try {
+        saved = await DB.saveAssessment(result);
+        this.currentResult = saved;
+      } catch (saveErr) {
+        console.warn("DB.saveAssessment error (non-fatal):", saveErr);
+      }
 
-    this.switchView("view-results");
-    this.renderResultsView(saved, otherTest);
+      // 4. ดึงประวัติผลสอบเพื่อนำมาวาดกราฟเปรียบเทียบ (Pre vs Post)
+      try {
+        const studentEmail = (this.currentUser && (this.currentUser.email || this.currentUser.username)) || result.email || "";
+        const history = (await DB.getStudentHistory(studentEmail)) || [];
+        this._cachedStudentHistory = Array.isArray(history) ? history : [];
+        const otherTest = this._cachedStudentHistory.find(
+          (h) => h && h.grade === saved.grade && h.test_id !== saved.test_id
+        );
+        // อัปเดตผลสอบและกราฟเปรียบเทียบเมื่อได้ข้อมูลประวัติแล้ว
+        this.renderResultsView(saved, otherTest || null);
+      } catch (histErr) {
+        console.warn("Could not fetch comparison history (non-fatal):", histErr);
+      }
+    } catch (criticalErr) {
+      console.error("Critical error in handleAssessmentSubmission:", criticalErr);
+      // Fallback: รับประกันว่าสลับไปหน้ารายงานผล 100%
+      this.currentResult = result;
+      this.switchView("view-results");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      this.renderResultsView(result, null);
+    }
   },
 
   // เรนเดอร์หน้ารายงานผลสอบและเกียรติบัตร
   renderResultsView(result, previousResult = null) {
-    document.getElementById("resStudentName").textContent = result.student_name;
-    document.getElementById("resStudentGrade").textContent = result.grade;
-    document.getElementById("resTestType").textContent = result.test_type;
-    document.getElementById("resTotalScore").textContent = `${result.score_total} / ${result.max_score}`;
-    document.getElementById("resPercentScore").textContent = `${result.score_percent}%`;
+    if (!result) return;
 
-    const level = CertificateEngine.getProficiencyLevel(result.score_percent);
-    document.getElementById("resLevelText").textContent = level;
+    const elName = document.getElementById("resStudentName");
+    const elGrade = document.getElementById("resStudentGrade");
+    const elType = document.getElementById("resTestType");
+    const elTotal = document.getElementById("resTotalScore");
+    const elPercent = document.getElementById("resPercentScore");
+    const elLevel = document.getElementById("resLevelText");
+
+    if (elName) elName.textContent = result.student_name || "นักเรียน";
+    if (elGrade) elGrade.textContent = result.grade || "-";
+    if (elType) elType.textContent = result.test_type || "-";
+    if (elTotal) elTotal.textContent = `${result.score_total || 0} / ${result.max_score || 75} คะแนน`;
+    if (elPercent) elPercent.textContent = `${result.score_percent || 0}%`;
+
+    const level = CertificateEngine.getProficiencyLevel(result.score_percent || 0);
+    if (elLevel) elLevel.textContent = level;
 
     const certCard = document.getElementById("resultCertificateCard");
     const certNotice = document.getElementById("resultCertificateNotice");
@@ -829,7 +878,11 @@ const App = {
 
       const previewCanvas = document.getElementById("certificatePreviewCanvas");
       if (previewCanvas) {
-        CertificateEngine.drawCertificateCanvas(result, previewCanvas);
+        try {
+          CertificateEngine.drawCertificateCanvas(result, previewCanvas);
+        } catch (canvasErr) {
+          console.warn("Certificate draw error:", canvasErr);
+        }
       }
     } else {
       if (certCard) certCard.classList.add("hidden");
@@ -845,7 +898,7 @@ const App = {
     }
 
     const domainCardsContainer = document.getElementById("resultDomainCardsContainer");
-    if (domainCardsContainer) {
+    if (domainCardsContainer && typeof IT_DOMAINS !== "undefined") {
       domainCardsContainer.innerHTML = Object.keys(IT_DOMAINS)
         .map((domKey) => {
           const dom = IT_DOMAINS[domKey];
@@ -869,7 +922,13 @@ const App = {
     }
 
     setTimeout(() => {
-      AssessmentCharts.renderRadarChart("resultRadarChartCanvas", result, previousResult);
+      try {
+        if (typeof AssessmentCharts !== "undefined" && AssessmentCharts.renderRadarChart) {
+          AssessmentCharts.renderRadarChart("resultRadarChartCanvas", result, previousResult);
+        }
+      } catch (chartErr) {
+        console.warn("Radar chart error:", chartErr);
+      }
     }, 150);
   },
 

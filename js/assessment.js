@@ -322,10 +322,11 @@ class AssessmentSession {
     if (this.timerInterval) clearInterval(this.timerInterval);
   }
 
-  // ปลดล็อกหน้าจอเมื่อนักเรียนกลับเข้าสู่โหมดเต็มหน้าจออย่างถูกต้อง
+  // ปลดล็อกหน้าจอเมื่อนักเรียนกลับเข้าสู่โหมดเต็มหน้าจออย่างถูกต้อง หรือส่งข้อสอบ
   resolveLockdown() {
     this._isLockedOut = false;
     document.body.classList.remove("exam-blurred");
+    document.body.classList.remove("exam-lockdown-active");
     const overlay = document.getElementById("examLockdownOverlay");
     if (overlay) {
       overlay.classList.add("hidden");
@@ -439,8 +440,13 @@ class AssessmentSession {
 
   autoSubmit(message) {
     if (this.isSubmitted) return;
-    alert("⚠️ " + message);
-    this.submit();
+    this._isShowingDialog = true;
+    try {
+      alert("⚠️ " + message);
+    } finally {
+      this._isShowingDialog = false;
+      this.submit();
+    }
   }
 }
 
