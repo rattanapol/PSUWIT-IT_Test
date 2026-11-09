@@ -34,17 +34,43 @@ const App = {
       });
     });
 
-    // ฟอร์มเข้าสู่ระบบสำหรับนักเรียน (Username & Password)
-    const studentLoginForm = document.getElementById("studentCredentialsForm");
-    if (studentLoginForm) {
-      studentLoginForm.addEventListener("submit", (e) => {
+    // ปุ่มเริ่มล็อกอินด้วย Google Account (@psuwit.ac.th)
+    const googleSignInBtn = document.getElementById("btnGoogleSignIn");
+    if (googleSignInBtn) {
+      googleSignInBtn.addEventListener("click", () => {
+        this.triggerGoogleSignIn();
+      });
+    }
+
+    // ฟอร์มใน Google OAuth Popup Modal (ขั้นตอนที่ 1.1: ป้อนอีเมล @psuwit.ac.th)
+    const googleEmailForm = document.getElementById("googleModalEmailForm");
+    if (googleEmailForm) {
+      googleEmailForm.addEventListener("submit", (e) => {
         e.preventDefault();
-        this.handleStudentCredentialsLogin();
+        this.handleGoogleModalEmailStep();
+      });
+    }
+
+    // ฟอร์มใน Google OAuth Popup Modal (ขั้นตอนที่ 1.2: ป้อนรหัสผ่าน Google)
+    const googlePasswordForm = document.getElementById("googleModalPasswordForm");
+    if (googlePasswordForm) {
+      googlePasswordForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        this.handleGoogleModalPasswordStep();
+      });
+    }
+
+    // ขั้นตอนที่ 2: ฟอร์มยืนยันชื่อ-นามสกุล และระดับชั้น หลังผ่าน Google Login แล้ว
+    const studentProfileForm = document.getElementById("studentProfileForm");
+    if (studentProfileForm) {
+      studentProfileForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        this.handleStudentProfileSubmit();
       });
     }
 
     // ฟอร์มเข้าสู่ระบบสำหรับผู้ดูแลระบบ (Username & Password)
-    const adminLoginForm = document.getElementById("adminCredentialsForm");
+    const adminLoginForm = document.getElementById("adminLoginForm");
     if (adminLoginForm) {
       adminLoginForm.addEventListener("submit", (e) => {
         e.preventDefault();
@@ -217,7 +243,7 @@ const App = {
   },
 
   // ==============================================================
-  // GOOGLE OAUTH 2.0 & DOMAIN RESTRICTION (@psuwit.ac.th)
+  // GOOGLE OAUTH 2.0 & 2-STEP LOGIN FLOW (@psuwit.ac.th)
   // ==============================================================
 
   // เริ่มต้นระบบ Google Identity Services (GIS)
@@ -253,8 +279,6 @@ const App = {
             shape: "pill",
             width: 280
           });
-          const directBtn = document.getElementById("btnGoogleSignInDirect");
-          if (directBtn) directBtn.style.display = "none";
         }
       } catch (err) {
         console.warn("Google ID init error:", err);
@@ -266,41 +290,247 @@ const App = {
   triggerGoogleSignIn() {
     this.resetLoginState();
     const clientId = this.googleClientId || APP_CONFIG.googleClientId;
-    if (window.google && window.google.accounts && window.google.accounts.id && clientId && !clientId.includes("YOUR_")) {
-      window.google.accounts.id.prompt((notification) => {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          this.openLocalhostTestModal();
-        }
-      });
-    } else {
-      // หากยังไม่ได้ตั้งค่า Google Client ID จริง หรือทดสอบบน Localhost
-      this.openLocalhostTestModal();
+
+    // หากมีการกำหนด Google Client ID จริง และมี GIS Token Client
+    if (clientId && typeof google !== "undefined" && google.accounts && google.accounts.oauth2) {
+      try {
+        const tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: "openid email profile",
+          hd: "psuwit.ac.th",
+          prompt: "select_account",
+          callback: async (tokenResponse) => {
+            if (tokenResponse && tokenResponse.access_token) {
+              try {
+                const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+                });
+                const userInfo = await res.json();
+                await this.verifyGoogleAccountAndProceed(userInfo.email, userInfo.name || "");
+              } catch (err) {
+                this.showDomainRestrictionAlert("ไม่สามารถดึงข้อมูลบัญชีจาก Google ได้ กรุณาลองใหม่อีกครั้ง");
+              }
+            }
+          }
+        });
+        tokenClient.requestAccessToken();
+        return;
+      } catch (e) {
+        console.warn("Google OAuth init error, opening Google Workspace Sign-In dialog:", e);
+      }
     }
+
+    // เปิดหน้าต่างจำลอง/ล็อกอิน Google Workspace (@psuwit.ac.th) ทันที
+    this.openGoogleModal();
+  },
+
+  // เปิด Modal ลงชื่อเข้าใช้ด้วย Google
+  openGoogleModal() {
+    const modal = document.getElementById("googleOAuthModal");
+    if (!modal) return;
+
+    this._pendingGoogleEmail = "";
+    const emailInput = document.getElementById("googleModalEmailInput");
+    const pwdInput = document.getElementById("googleModalPasswordInput");
+    const emailErr = document.getElementById("googleModalEmailError");
+    const pwdErr = document.getElementById("googleModalPasswordError");
+    const emailForm = document.getElementById("googleModalEmailForm");
+    const pwdForm = document.getElementById("googleModalPasswordForm");
+
+    if (emailInput) emailInput.value = "";
+    if (pwdInput) pwdInput.value = "";
+    if (emailErr) emailErr.classList.add("hidden");
+    if (pwdErr) pwdErr.classList.add("hidden");
+    if (emailForm) emailForm.classList.remove("hidden");
+    if (pwdForm) pwdForm.classList.add("hidden");
+
+    modal.classList.add("active");
+    setTimeout(() => {
+      if (emailInput) emailInput.focus();
+    }, 100);
+  },
+
+  closeGoogleModal() {
+    const modal = document.getElementById("googleOAuthModal");
+    if (modal) modal.classList.remove("active");
+  },
+
+  backToGoogleEmailStep() {
+    const emailForm = document.getElementById("googleModalEmailForm");
+    const pwdForm = document.getElementById("googleModalPasswordForm");
+    const emailInput = document.getElementById("googleModalEmailInput");
+    if (pwdForm) pwdForm.classList.add("hidden");
+    if (emailForm) emailForm.classList.remove("hidden");
+    if (emailInput) emailInput.focus();
+  },
+
+  // ตรวจสอบอีเมลใน Modal (ขั้นตอนที่ 1.1)
+  handleGoogleModalEmailStep() {
+    const input = document.getElementById("googleModalEmailInput");
+    const email = (input ? input.value : "").trim().toLowerCase();
+    const errEl = document.getElementById("googleModalEmailError");
+
+    // [สำคัญ] ตรวจสอบ Domain Restriction: ปฏิเสธทันทีถ้าไม่ได้ลงท้ายด้วย @psuwit.ac.th
+    if (!email.endsWith("@psuwit.ac.th")) {
+      const msg = "อนุญาตเฉพาะนักเรียน/บุคลากรภายในองค์กรเท่านั้น";
+      if (errEl) {
+        errEl.innerHTML = `🚫 <strong>ปฏิเสธการเข้าใช้งาน:</strong> ${msg}<br><span class="text-xs">ต้องเป็นอีเมลที่ลงท้ายด้วย @psuwit.ac.th เท่านั้น (ไม่อนุญาต @gmail.com)</span>`;
+        errEl.classList.remove("hidden");
+      }
+      this.showDomainRestrictionAlert(msg);
+      return;
+    }
+
+    if (errEl) errEl.classList.add("hidden");
+    this._pendingGoogleEmail = email;
+
+    const pill = document.getElementById("googleModalAccountPill");
+    if (pill) pill.textContent = email;
+
+    const emailForm = document.getElementById("googleModalEmailForm");
+    const pwdForm = document.getElementById("googleModalPasswordForm");
+    const pwdInput = document.getElementById("googleModalPasswordInput");
+
+    if (emailForm) emailForm.classList.add("hidden");
+    if (pwdForm) pwdForm.classList.remove("hidden");
+    if (pwdInput) {
+      pwdInput.value = "";
+      pwdInput.focus();
+    }
+  },
+
+  // ตรวจสอบรหัสผ่านใน Modal (ขั้นตอนที่ 1.2) และเข้าสู่ขั้นตอนที่ 2
+  async handleGoogleModalPasswordStep() {
+    const pwdInput = document.getElementById("googleModalPasswordInput");
+    const pwd = pwdInput ? pwdInput.value : "";
+    const errEl = document.getElementById("googleModalPasswordError");
+
+    if (!pwd) {
+      if (errEl) {
+        errEl.textContent = "กรุณาป้อนรหัสผ่านบัญชี Google ของคุณ";
+        errEl.classList.remove("hidden");
+      }
+      return;
+    }
+
+    if (errEl) errEl.classList.add("hidden");
+    this.closeGoogleModal();
+    await this.verifyGoogleAccountAndProceed(this._pendingGoogleEmail, "");
   },
 
   // จัดการ Credential Response จาก Google Identity Services
   async handleGoogleCredentialResponse(response) {
     this.resetLoginState();
     const res = await DB.authenticateGoogleUser({ credential: response.credential });
-    this.processAuthResult(res);
+    if (!res.success) {
+      this.showDomainRestrictionAlert(res.message);
+      return;
+    }
+    await this.verifyGoogleAccountAndProceed(res.user.email, res.user.name || res.user.full_name || "");
   },
 
-  // ประมวลผลผลลัพธ์การยืนยันตัวตน
-  processAuthResult(res) {
-    if (!res.success) {
-      if (res.code === "DOMAIN_RESTRICTED" || (res.message && res.message.includes("เฉพาะนักเรียน/บุคลากรภายในองค์กร"))) {
-        this.showDomainRestrictionAlert(res.message);
-      } else {
-        const errBanner = document.getElementById("studentAuthErrorBanner");
-        if (errBanner) {
-          errBanner.textContent = res.message || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ";
-          errBanner.classList.remove("hidden");
-        }
-      }
+  // ตรวจสอบความถูกต้องและส่งต่อเข้าสู่ ขั้นตอนที่ 2 (Step 2: Profile Confirmation)
+  async verifyGoogleAccountAndProceed(rawEmail, googleDisplayName = "") {
+    const cleanEmail = (rawEmail || "").trim().toLowerCase();
+
+    // 1. ตรวจสอบ Domain Validation
+    if (!cleanEmail.endsWith("@psuwit.ac.th")) {
+      this.showDomainRestrictionAlert("อนุญาตเฉพาะนักเรียน/บุคลากรภายในองค์กรเท่านั้น");
       return;
     }
 
-    this.currentUser = res.user;
+    this.resetLoginState();
+
+    // 2. สกัด student_id จากชื่อส่วนหน้าของอีเมล
+    const studentId = cleanEmail.split("@")[0];
+
+    // 3. บันทึกข้อมูลลงตาราง users ในฐานข้อมูล (SQLite + Supabase)
+    const authRes = await DB.authenticateGoogleUser({ email: cleanEmail, name: googleDisplayName });
+    const userRecord = authRes.user || {
+      email: cleanEmail,
+      full_name: googleDisplayName || cleanEmail.split("@")[0],
+      student_id: studentId,
+      role: cleanEmail.startsWith("50015") || cleanEmail.includes("winai") ? "admin" : "student"
+    };
+
+    // 4. ดึงข้อมูลนักเรียนจากฐานข้อมูลเดิม (ถ้ามี)
+    let studentProfile = null;
+    try {
+      const students = await DB.getStudents();
+      studentProfile = students.find((s) => (s.email || "").toLowerCase() === cleanEmail || (s.username || "").toLowerCase() === cleanEmail);
+    } catch (e) {}
+
+    this.pendingSsoSession = {
+      email: cleanEmail,
+      student_id: studentId,
+      full_name: (studentProfile && studentProfile.name) || userRecord.full_name || googleDisplayName || "",
+      grade: (studentProfile && studentProfile.grade) || userRecord.grade || "ม.1",
+      role: userRecord.role || "student"
+    };
+
+    // 5. แสดงผลขั้นตอนที่ 2 (Step 2: ยืนยันชื่อ-นามสกุล และระดับชั้น)
+    const verifiedEmailDisplay = document.getElementById("verifiedSsoEmailDisplay");
+    const verifiedIdDisplay = document.getElementById("verifiedSsoIdDisplay");
+    const nameField = document.getElementById("loginStudentName");
+    const gradeField = document.getElementById("loginStudentGrade");
+
+    if (verifiedEmailDisplay) verifiedEmailDisplay.textContent = cleanEmail;
+    if (verifiedIdDisplay) verifiedIdDisplay.textContent = studentId;
+    if (nameField) nameField.value = this.pendingSsoSession.full_name;
+    if (gradeField) gradeField.value = this.pendingSsoSession.grade;
+
+    const ssoStep1 = document.getElementById("studentSsoForm");
+    const profileStep2 = document.getElementById("studentProfileForm");
+    if (ssoStep1) ssoStep1.classList.add("hidden");
+    if (profileStep2) profileStep2.classList.remove("hidden");
+
+    if (nameField && !nameField.value) {
+      nameField.focus();
+    } else if (gradeField) {
+      gradeField.focus();
+    }
+  },
+
+  // ขั้นตอนที่ 2: กดยืนยันข้อมูลและเข้าสู่ระบบการทดสอบ
+  async handleStudentProfileSubmit() {
+    if (!this.pendingSsoSession) {
+      this.resetSsoStep();
+      return;
+    }
+
+    const nameInput = document.getElementById("loginStudentName")?.value.trim() || "";
+    const gradeInput = document.getElementById("loginStudentGrade")?.value || "";
+
+    if (!nameInput) {
+      this.showDomainRestrictionAlert("กรุณากรอกชื่อ-นามสกุล");
+      return;
+    }
+
+    if (!gradeInput) {
+      this.showDomainRestrictionAlert("กรุณาเลือกระดับชั้นมัธยมศึกษา");
+      return;
+    }
+
+    this.currentUser = {
+      ...this.pendingSsoSession,
+      name: nameInput,
+      full_name: nameInput,
+      grade: gradeInput
+    };
+
+    // บันทึก/อัปเดตลงฐานข้อมูล students
+    try {
+      await DB.saveStudent({
+        student_id: this.currentUser.student_id,
+        name: this.currentUser.name,
+        email: this.currentUser.email,
+        username: this.currentUser.email,
+        grade: this.currentUser.grade,
+        role: this.currentUser.role,
+        status: "active"
+      });
+    } catch (e) {}
+
     localStorage.setItem(APP_CONFIG.storageKeys.currentUser, JSON.stringify(this.currentUser));
 
     if (this.currentUser.role === "admin") {
@@ -312,10 +542,20 @@ const App = {
     }
   },
 
+  // สลับบัญชี SSO (ย้อนกลับไปขั้นตอนที่ 1)
+  resetSsoStep() {
+    this.pendingSsoSession = null;
+    const ssoStep1 = document.getElementById("studentSsoForm");
+    const profileStep2 = document.getElementById("studentProfileForm");
+    if (ssoStep1) ssoStep1.classList.remove("hidden");
+    if (profileStep2) profileStep2.classList.add("hidden");
+    this.resetLoginState();
+  },
+
   // แสดงกล่องแจ้งเตือนการปฏิเสธการเข้าใช้งานเนื่องจากโดเมนไม่ถูกต้อง (Domain Restricted)
   showDomainRestrictionAlert(msg) {
     const alertBox = document.getElementById("domainRestrictionAlert");
-    const textEl = document.getElementById("domainAlertText");
+    const textEl = document.getElementById("domainRestrictionMsg") || document.getElementById("domainAlertText");
     if (textEl && msg) textEl.textContent = msg;
     if (alertBox) {
       alertBox.classList.remove("hidden");
@@ -327,73 +567,8 @@ const App = {
   resetLoginState() {
     const alertBox = document.getElementById("domainRestrictionAlert");
     if (alertBox) alertBox.classList.add("hidden");
-    const errBanner = document.getElementById("studentAuthErrorBanner");
-    if (errBanner) errBanner.classList.add("hidden");
     const adminErrBanner = document.getElementById("adminAuthErrorBanner");
     if (adminErrBanner) adminErrBanner.classList.add("hidden");
-  },
-
-  // Modal เครื่องมือทดสอบบน Localhost
-  openLocalhostTestModal() {
-    this.resetLoginState();
-    const modal = document.getElementById("modalLocalhostGoogleTest");
-    if (modal) modal.classList.add("active");
-  },
-
-  closeLocalhostTestModal() {
-    const modal = document.getElementById("modalLocalhostGoogleTest");
-    if (modal) modal.classList.remove("active");
-  },
-
-  // จำลองการเข้าสู่ระบบของบัญชี Google ต่างๆ บน Localhost
-  async simulateGoogleLogin(email, name) {
-    this.closeLocalhostTestModal();
-    this.resetLoginState();
-    const res = await DB.authenticateGoogleUser({ email, name });
-    this.processAuthResult(res);
-  },
-
-  simulateCustomGoogleLogin() {
-    const input = document.getElementById("inputCustomTestEmail");
-    const email = input ? input.value.trim() : "";
-    if (!email) return;
-    this.simulateGoogleLogin(email, "ผู้ทดสอบ " + email.split("@")[0]);
-  },
-
-  toggleAdminFallbackForm() {
-    const box = document.getElementById("adminFallbackContainer");
-    if (box) {
-      box.classList.toggle("hidden");
-    }
-  },
-
-  // ล็อกอินฝั่งนักเรียนด้วย Username และ Password
-  async handleStudentCredentialsLogin() {
-    const usernameInput = document.getElementById("loginStudentUsername").value.trim();
-    const passwordInput = document.getElementById("loginStudentPassword").value;
-    const errBanner = document.getElementById("studentAuthErrorBanner");
-    if (errBanner) errBanner.classList.add("hidden");
-
-    const res = await DB.authenticateUser(usernameInput, passwordInput, "student");
-    if (!res.success) {
-      if (errBanner) {
-        errBanner.textContent = res.message;
-        errBanner.classList.remove("hidden");
-      }
-      return;
-    }
-
-    this.currentUser = res.user;
-    localStorage.setItem(APP_CONFIG.storageKeys.currentUser, JSON.stringify(this.currentUser));
-    document.getElementById("loginStudentPassword").value = "";
-
-    if (this.currentUser.role === "admin") {
-      this.switchView("view-admin");
-      AdminController.init();
-    } else {
-      this.switchView("view-student-portal");
-      this.renderStudentPortal();
-    }
   },
 
   // ล็อกอินฝั่งผู้ดูแลระบบด้วย Username และ Password
