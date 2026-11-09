@@ -13,7 +13,7 @@
     href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💻</text></svg>">
 
   <!-- Main Stylesheet -->
-  <link rel="stylesheet" href="css/main.css?v=7">
+  <link rel="stylesheet" href="css/main.css?v=8">
 
   <!-- Chart.js CDN for Spider Radar Charts -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -67,6 +67,9 @@
     <!-- ============================================================== -->
     <!-- VIEW 1: AUTHENTICATION (เข้าสู่ระบบด้วย Username & Password)    -->
     <!-- ============================================================== -->
+    <!-- ============================================================== -->
+    <!-- VIEW 1: AUTHENTICATION (Google OAuth 2.0 @psuwit.ac.th เท่านั้น) -->
+    <!-- ============================================================== -->
     <section id="view-auth" class="view-section active">
       <div class="auth-wrapper">
         <div class="auth-card">
@@ -76,112 +79,74 @@
           </div>
 
           <div class="auth-card-body">
-            <!-- Tabs: Student / Admin -->
-            <div class="auth-tabs">
-              <button type="button" class="auth-tab-btn active" data-role="student">
-                🎓 สำหรับนักเรียน
+
+            <!-- Domain Restriction Notice Box (แสดงเมื่ออีเมลไม่ตรงตามโดเมนที่กำหนด) -->
+            <div id="domainRestrictionAlert" class="domain-restricted-card hidden">
+              <div class="dr-icon">🚫</div>
+              <div class="dr-title">ปฏิเสธการเข้าใช้งาน</div>
+              <div class="dr-desc" id="domainRestrictionMsg">
+                อนุญาตเฉพาะนักเรียน/บุคลากรภายในองค์กรเท่านั้น
+              </div>
+              <div class="text-xs text-red-700 mt-2">
+                กรุณาเข้าสู่ระบบด้วยบัญชี Google ที่ลงท้ายด้วย <strong>@psuwit.ac.th</strong> เท่านั้น
+              </div>
+              <button type="button" class="btn btn-sm btn-secondary mt-3" onclick="App.resetLoginState()">
+                🔄 ลองใหม่อีกครั้งด้วยบัญชี @psuwit.ac.th
               </button>
-              <button type="button" class="auth-tab-btn" data-role="admin">
-                🛡️ ผู้ดูแลระบบ (Admin)
+            </div>
+
+            <!-- SSO Instruction Banner -->
+            <div id="ssoInstructionBanner" class="p-4 bg-indigo-50 border border-indigo-200 rounded-xl mb-4 text-center">
+              <div class="text-sm font-bold text-indigo-950">
+                🔐 เข้าสู่ระบบด้วย Google Account ของโรงเรียน
+              </div>
+              <div class="text-xs text-indigo-700 mt-1">
+                บังคับใช้อีเมลองค์กรที่ลงท้ายด้วย <strong>@psuwit.ac.th</strong> เท่านั้น
+              </div>
+            </div>
+
+            <!-- Google OAuth 2.0 Sign In Section -->
+            <div class="google-login-wrapper">
+              <!-- Google Identity Services Container -->
+              <div id="googleSignInBtnContainer" style="min-height: 44px; display: flex; justify-content: center;"></div>
+
+              <!-- Fallback Direct Google Button -->
+              <button id="btnGoogleSignInDirect" type="button" class="btn-google-sso" onclick="App.triggerGoogleSignIn()">
+                <svg class="google-icon-svg" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                </svg>
+                <span>เข้าสู่ระบบด้วย Google (@psuwit.ac.th)</span>
+              </button>
+
+              <!-- Localhost Testing Helper Button -->
+              <button type="button" class="btn btn-sm btn-secondary" style="width: 100%; margin-top: 0.5rem;" onclick="App.openLocalhostTestModal()">
+                💻 ทดสอบบน Localhost (จำลอง Login ตรวจสอบ Domain)
               </button>
             </div>
 
-            <!-- Student Login Container (Username & Password) -->
-            <div id="studentLoginContainer">
-              <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl mb-4 flex items-center justify-between">
-                <div>
-                  <div class="text-xs font-bold text-indigo-900">🔐 เข้าสู่ระบบสำหรับนักเรียน (Username &amp; Password)
+            <!-- Collapsible Admin Fallback Section -->
+            <div class="mt-6 pt-4 border-t border-slate-200 text-center">
+              <button type="button" class="btn btn-sm btn-link text-xs text-slate-500" onclick="App.toggleAdminFallbackForm()">
+                🛡️ ผู้ดูแลระบบ: เข้าสู่ระบบด้วยรหัสผ่านสำรอง
+              </button>
+
+              <div id="adminFallbackContainer" class="hidden mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl text-left">
+                <div class="text-xs font-bold text-slate-700 mb-2">สำรองสำหรับ Admin (เมื่อยังไม่ได้ตั้งค่า Google OAuth):</div>
+                <form id="adminCredentialsForm">
+                  <div class="form-group mb-2">
+                    <input type="text" id="loginAdminUsername" class="form-control text-xs" placeholder="Email หรือ Username ผู้ดูแลระบบ" required>
                   </div>
-                  <div class="text-xs text-indigo-700 mt-0.5">ใช้ชื่อผู้ใช้งานและรหัสผ่านที่กำหนดในระบบโรงเรียน</div>
-                </div>
-                <span class="badge badge-primary">Student</span>
-              </div>
-
-              <div id="studentAuthErrorBanner"
-                class="hidden p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold">
-              </div>
-
-              <form id="studentCredentialsForm">
-                <div class="form-group">
-                  <label class="form-label" for="loginStudentUsername">ชื่อผู้ใช้งาน (Username) *</label>
-                  <input type="text" id="loginStudentUsername" class="form-control"
-                    placeholder="เช่น 6166@psuwit.ac.th หรือรหัสนักเรียน 6166" autocomplete="username" required>
-                  <p class="form-help">สามารถกรอกอีเมลเต็ม เช่น <code>6166@psuwit.ac.th</code> หรือเฉพาะรหัสนักเรียน 4
-                    หลัก เช่น <code>6166</code></p>
-                </div>
-
-                <div class="form-group">
-                  <label class="form-label" for="loginStudentPassword">รหัสผ่าน (Password) *</label>
-                  <div class="flex gap-2">
-                    <input type="password" id="loginStudentPassword" class="form-control"
-                      placeholder="กรอกรหัสผ่านของคุณ (ค่าเริ่มต้น 123456)" autocomplete="current-password" required>
-                    <button type="button" class="btn btn-secondary btn-sm"
-                      onclick="App.togglePasswordVisibility('loginStudentPassword', this)" title="แสดง/ซ่อนรหัสผ่าน"
-                      style="white-space: nowrap;">
-                      👁️ แสดง
-                    </button>
+                  <div class="form-group mb-2">
+                    <input type="password" id="loginAdminPassword" class="form-control text-xs" placeholder="รหัสผ่าน" required>
                   </div>
-                </div>
-
-                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem;">
-                  🚀 เข้าสู่ระบบทำแบบทดสอบ
-                </button>
-              </form>
-
-              <div class="mt-4 pt-3 border-t border-slate-200 flex justify-between items-center text-xs">
-                <span class="text-slate-500">ต้องการเปลี่ยนรหัสผ่านของคุณ?</span>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="App.openChangePasswordModal()">
-                  🔑 แก้ไขรหัสผ่านด้วยตนเอง
-                </button>
+                  <button type="submit" class="btn btn-sm btn-primary" style="width: 100%;">เข้าสู่ระบบ Admin</button>
+                </form>
               </div>
             </div>
 
-            <!-- Admin Login Container (Username & Password สำหรับผู้ดูแลระบบ) -->
-            <div id="adminLoginForm" class="hidden">
-              <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl mb-4 flex items-center justify-between">
-                <div>
-                  <div class="text-xs font-bold text-amber-900">🛡️ เข้าสู่ระบบผู้ดูแลระบบ (Admin Only)</div>
-                  <div class="text-xs text-amber-800 mt-0.5">จำกัดสิทธิ์เฉพาะบัญชีผู้ดูแลระบบในฐานข้อมูลเท่านั้น</div>
-                </div>
-                <span class="badge badge-warning">Admin</span>
-              </div>
-
-              <div id="adminAuthErrorBanner"
-                class="hidden p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold">
-              </div>
-
-              <form id="adminCredentialsForm">
-                <div class="form-group">
-                  <label class="form-label" for="loginAdminUsername">ชื่อผู้ใช้งานผู้ดูแลระบบ (Admin Username) *</label>
-                  <input type="text" id="loginAdminUsername" class="form-control" placeholder="Email ผู้ดูแลระบบ"
-                    autocomplete="username" required>
-                </div>
-
-                <div class="form-group">
-                  <label class="form-label" for="loginAdminPassword">รหัสผ่านผู้ดูแลระบบ (Password) *</label>
-                  <div class="flex gap-2">
-                    <input type="password" id="loginAdminPassword" class="form-control"
-                      placeholder="กรอกรหัสผ่านผู้ดูแลระบบ" autocomplete="current-password" required>
-                    <button type="button" class="btn btn-secondary btn-sm"
-                      onclick="App.togglePasswordVisibility('loginAdminPassword', this)" title="แสดง/ซ่อนรหัสผ่าน"
-                      style="white-space: nowrap;">
-                      👁️ แสดง
-                    </button>
-                  </div>
-                </div>
-
-                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem;">
-                  🛡️ เข้าสู่ระบบผู้ดูแลระบบ (Admin)
-                </button>
-              </form>
-
-              <div class="mt-4 pt-3 border-t border-slate-200 flex justify-between items-center text-xs">
-                <span class="text-slate-500">ต้องการเปลี่ยนรหัสผ่านผู้ดูแลระบบ?</span>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="App.openChangePasswordModal()">
-                  🔑 แก้ไขรหัสผ่านด้วยตนเอง
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -290,13 +255,13 @@
     <!-- ============================================================== -->
     <section id="view-assessment" class="view-section">
       <div class="assessment-container">
-        <!-- Safety Alert Banner (Anti-Cheat Violation Notification) -->
-        <div id="examViolationBanner" class="safety-bar hidden">
-          <div>
-            ⚠️ ตรวจพบการสลับหน้าต่างหรือแท็บเบราว์เซอร์!
-            (การเตือนครั้งที่: <span id="examViolationCount" class="font-bold">1 / 3</span>)
+        <!-- Anti-Copy Protection Notice Bar -->
+        <div id="examNoticeBanner" class="p-3 bg-amber-50 border border-amber-200 rounded-xl mb-4 flex items-center justify-between text-xs text-amber-900">
+          <div class="flex items-center gap-2">
+            <span>🛡️</span>
+            <span><strong>ข้อตกลงการสอบ:</strong> ไม่อนุญาตให้คัดลอกข้อความคำถามหรือตัวเลือกคำตอบเพื่อไปค้นหา</span>
           </div>
-          <div class="text-xs">ห้ามสลับจอ มิฉะนั้นระบบจะส่งข้อสอบทันที</div>
+          <span class="badge badge-warning">Copy Protection</span>
         </div>
 
         <!-- Exam Header Bar -->
@@ -1059,49 +1024,85 @@
   </div>
 
   <!-- ============================================================== -->
-  <!-- STRICT EXAM LOCKDOWN OVERLAY (ม่านล็อกหน้าจอฉุกเฉิน 100%)       -->
+  <!-- IN-PAGE CONFIRMATION MODALS (แทนที่ window.confirm & alert)     -->
   <!-- ============================================================== -->
-  <div id="examLockdownOverlay" class="lockdown-overlay hidden">
-    <div class="lockdown-box">
-      <div class="lockdown-icon">🔒</div>
-      <div class="lockdown-badge">STRICT EXAM LOCKDOWN ACTIVATED</div>
-      <h2 class="lockdown-title">หน้าจอแบบทดสอบถูกบล็อกทันที!</h2>
-      <p class="lockdown-desc">
-        ระบบตรวจพบว่าคุณ<strong>สลับหน้าต่าง ออกจากโหมดเต็มหน้าจอ หรือเปิดโปรแกรมอื่น</strong><br>
-        ระบบไม่อนุญาตให้เปิดหน้าต่างอื่น หรือสลับหน้าจอขณะทำแบบทดสอบโดยเด็ดขาด
+
+  <!-- Modal 1: ยืนยันเริ่มทำแบบทดสอบ -->
+  <div id="modalConfirmStartExam" class="app-confirm-modal">
+    <div class="app-confirm-box">
+      <div class="app-confirm-icon">🚀</div>
+      <h3 class="app-confirm-title" id="confirmStartExamTitle">เริ่มทำแบบทดสอบ</h3>
+      <p class="app-confirm-desc" id="confirmStartExamDesc">
+        คุณกำลังจะเริ่มทำแบบทดสอบ<br>
+        • มีเวลา 15 นาที (จำนวน 15 ข้อ รวม 75 คะแนน)<br>
+        • <strong>ไม่อนุญาตให้คัดลอกข้อสอบหรือตัวเลือกคำตอบ</strong>
       </p>
-
-      <div class="lockdown-warning-card">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs font-semibold text-rose-200">ประวัติการตรวจพบความผิดปกติ:</span>
-          <span id="lockdownViolationPill" class="badge badge-fail font-bold">ครั้งที่ 1 / 3</span>
-        </div>
-        <div id="lockdownViolationReason" class="text-xs text-rose-100 font-medium">
-          ตรวจพบการสลับหน้าต่าง หรือหลุดออกจากโหมดเต็มหน้าจอ
-        </div>
-        <div class="text-[11px] text-rose-300 mt-2">
-          * พฤติกรรมนี้ถูกบันทึกส่งอาจารย์ผู้คุมสอบ หากครบกำหนด ระบบจะส่งข้อสอบและยุติการสอบทันที
-        </div>
+      <div class="app-confirm-actions">
+        <button type="button" class="btn btn-secondary" onclick="App.closeConfirmStartModal()">ยกเลิก</button>
+        <button type="button" class="btn btn-primary" id="btnConfirmStartExamAction">เริ่มทำแบบทดสอบ 🚀</button>
       </div>
+    </div>
+  </div>
 
-      <div class="lockdown-actions">
-        <button id="btnResumeExamLockdown" type="button" class="btn btn-lockdown-resume" onclick="App.resumeExamFullscreen()">
-          🛡️ คลิกที่นี่เพื่อกลับเข้าสู่โหมดเต็มหน้าจอและสอบต่อ
+  <!-- Modal 2: ยืนยันส่งแบบทดสอบ -->
+  <div id="modalConfirmSubmitExam" class="app-confirm-modal">
+    <div class="app-confirm-box">
+      <div class="app-confirm-icon">📋</div>
+      <h3 class="app-confirm-title">ยืนยันการส่งแบบทดสอบ</h3>
+      <p class="app-confirm-desc" id="confirmSubmitExamDesc">
+        คุณตอบไปแล้ว 15 / 15 ข้อ<br>ต้องการส่งแบบทดสอบเพื่อบันทึกผลและดูคะแนนใช่หรือไม่?
+      </p>
+      <div class="app-confirm-actions">
+        <button type="button" class="btn btn-secondary" onclick="App.closeConfirmSubmitModal()">กลับไปตรวจทาน</button>
+        <button type="button" class="btn btn-primary" id="btnConfirmSubmitExamAction"
+          style="background: linear-gradient(135deg, #059669, #10B981);">
+          ยืนยันส่งข้อสอบ 🚀
         </button>
       </div>
     </div>
   </div>
 
+  <!-- Modal 3: เครื่องมือทดสอบ Google Login บน Localhost -->
+  <div id="modalLocalhostGoogleTest" class="app-confirm-modal">
+    <div class="app-confirm-box" style="max-width: 520px; text-align: left;">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="font-bold text-base text-slate-800">💻 ทดสอบ Google Login บน Localhost</h3>
+        <button type="button" class="btn btn-sm btn-secondary" onclick="document.getElementById('modalLocalhostGoogleTest').classList.remove('active')">✕</button>
+      </div>
+      <p class="text-xs text-slate-600 mb-3">
+        ทดสอบเงื่อนไข <strong>Domain Restriction (@psuwit.ac.th)</strong> และการดึง <code>student_id</code>:
+      </p>
+      <div class="space-y-2 mb-4">
+        <button type="button" class="btn btn-sm btn-secondary" style="width: 100%; text-align: left; justify-content: flex-start;" onclick="App.simulateGoogleLogin('50015@psuwit.ac.th', 'นายวินัย รัตนพล')">
+          ✅ <strong>50015@psuwit.ac.th</strong> (ผ่าน - บุคลากร/Admin)
+        </button>
+        <button type="button" class="btn btn-sm btn-secondary" style="width: 100%; text-align: left; justify-content: flex-start;" onclick="App.simulateGoogleLogin('6166@psuwit.ac.th', 'นักเรียน ทดสอบ ม.1')">
+          ✅ <strong>6166@psuwit.ac.th</strong> (ผ่าน - นักเรียน ม.1)
+        </button>
+        <button type="button" class="btn btn-sm btn-secondary" style="width: 100%; text-align: left; justify-content: flex-start; color: #DC2626; border-color: #FCA5A5; background: #FEF2F2;" onclick="App.simulateGoogleLogin('user@gmail.com', 'คนภายนอก')">
+          ❌ <strong>user@gmail.com</strong> (ปฏิเสธ - โดเมนภายนอก)
+        </button>
+      </div>
+      <div class="form-group mb-2">
+        <label class="form-label text-xs">หรือทดสอบพิมพ์อีเมลใดๆ:</label>
+        <div class="flex gap-2">
+          <input type="email" id="inputCustomTestEmail" class="form-control text-xs" placeholder="เช่น 55555@psuwit.ac.th หรือ someone@gmail.com">
+          <button type="button" class="btn btn-primary btn-sm" onclick="App.simulateCustomGoogleLogin()">ทดสอบ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Application Scripts in Order -->
-  <script src="js/config.js?v=7"></script>
-  <script src="js/questions.js?v=7"></script>
-  <script src="js/users_data.js?v=7"></script>
-  <script src="js/storage.js?v=7"></script>
-  <script src="js/charts.js?v=7"></script>
-  <script src="js/certificate.js?v=7"></script>
-  <script src="js/assessment.js?v=7"></script>
-  <script src="js/admin.js?v=7"></script>
-  <script src="js/app.js?v=7"></script>
+  <script src="js/config.js?v=8"></script>
+  <script src="js/questions.js?v=8"></script>
+  <script src="js/users_data.js?v=8"></script>
+  <script src="js/storage.js?v=8"></script>
+  <script src="js/charts.js?v=8"></script>
+  <script src="js/certificate.js?v=8"></script>
+  <script src="js/assessment.js?v=8"></script>
+  <script src="js/admin.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
 
 </body>
 

@@ -732,133 +732,179 @@ body {
 .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ==========================================================================
-   Strict Exam Lockdown Mode & Security Curtain
+   Strict Copy-Paste Protection & In-Page Toast Notifications
+   (แทนที่การล็อกหน้าจอเดิม เพื่อป้องกันการคัดลอกข้อความไปหาคำตอบ)
    ========================================================================== */
 
-/* Hide Application Header during exam to prevent navigating away */
-body.exam-lockdown-active .app-header {
-  display: none !important;
-}
-
-body.exam-lockdown-active {
+/* ป้องกันการคลุมดำ/คัดลอกข้อสอบและตัวเลือก */
+#view-assessment,
+.assessment-container,
+.question-card,
+.q-text,
+.q-options,
+.option-card {
   user-select: none !important;
   -webkit-user-select: none !important;
   -moz-user-select: none !important;
+  -ms-user-select: none !important;
 }
 
-/* Obscure all questions completely when blur or violation occurs */
-body.exam-blurred #view-assessment .assessment-container {
-  filter: blur(28px) grayscale(50%) !important;
-  pointer-events: none !important;
-  opacity: 0.1 !important;
-  transition: filter 0.1s ease, opacity 0.1s ease;
+/* Toast แจ้งเตือนเมื่อพยายามคัดลอกข้อสอบ (แทนที่ window.alert) */
+.assessment-copy-toast {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: rgba(17, 24, 39, 0.95);
+  color: #FDE047;
+  padding: 0.85rem 1.75rem;
+  border-radius: 9999px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(253, 224, 71, 0.3);
+  z-index: 999999;
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+  white-space: nowrap;
 }
 
-/* Impenetrable Lockdown Curtain Overlay */
-.lockdown-overlay {
+.assessment-copy-toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+/* In-Page Confirmation Modals (แทนที่ window.confirm & window.alert) */
+.app-confirm-modal {
   position: fixed;
   inset: 0;
-  z-index: 2147483647; /* Maximum 32-bit integer z-index */
-  background: radial-gradient(circle at center, rgba(26, 11, 22, 0.98) 0%, rgba(9, 4, 12, 0.99) 100%);
-  backdrop-filter: blur(25px);
-  -webkit-backdrop-filter: blur(25px);
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem;
-  animation: lockdownFadeIn 0.2s ease-out;
+  z-index: 99999;
+  padding: 1.25rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
-@keyframes lockdownFadeIn {
-  from { opacity: 0; transform: scale(1.02); }
-  to { opacity: 1; transform: scale(1); }
+.app-confirm-modal.active {
+  opacity: 1;
+  pointer-events: auto;
 }
 
-.lockdown-box {
-  max-width: 580px;
+.app-confirm-box {
+  background: #FFFFFF;
+  border-radius: var(--radius-lg);
+  max-width: 480px;
   width: 100%;
-  background: #111827;
-  border: 2px solid #EF4444;
-  box-shadow: 0 0 60px rgba(239, 68, 68, 0.35), 0 25px 50px -12px rgba(0, 0, 0, 0.95);
-  border-radius: 20px;
-  padding: 2.25rem 2rem;
+  padding: 1.75rem;
+  box-shadow: var(--shadow-xl);
   text-align: center;
-  color: #FFFFFF;
+  transform: scale(0.95);
+  transition: transform 0.2s ease;
 }
 
-.lockdown-icon {
-  font-size: 3.5rem;
+.app-confirm-modal.active .app-confirm-box {
+  transform: scale(1);
+}
+
+.app-confirm-icon {
+  font-size: 2.75rem;
   margin-bottom: 0.5rem;
-  line-height: 1;
-  animation: lockdownPulse 1.2s infinite alternate ease-in-out;
 }
 
-@keyframes lockdownPulse {
-  0% { transform: scale(1) rotate(-3deg); }
-  100% { transform: scale(1.1) rotate(3deg); }
-}
-
-.lockdown-badge {
-  display: inline-block;
-  background: rgba(239, 68, 68, 0.2);
-  border: 1px solid #EF4444;
-  color: #FCA5A5;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  padding: 4px 14px;
-  border-radius: 9999px;
-  margin-bottom: 0.85rem;
-}
-
-.lockdown-title {
+.app-confirm-title {
   font-family: var(--font-heading);
-  font-size: 1.65rem;
+  font-size: 1.25rem;
   font-weight: 700;
-  color: #F87171;
-  margin-bottom: 0.75rem;
-  line-height: 1.3;
+  color: var(--text-main);
+  margin-bottom: 0.5rem;
 }
 
-.lockdown-desc {
+.app-confirm-desc {
   font-size: 0.925rem;
-  color: #E2E8F0;
+  color: var(--text-muted);
   line-height: 1.6;
-  margin-bottom: 1.25rem;
-}
-
-.lockdown-warning-card {
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px dashed rgba(239, 68, 68, 0.5);
-  border-radius: 12px;
-  padding: 1rem;
-  text-align: left;
   margin-bottom: 1.5rem;
 }
 
-.btn-lockdown-resume {
-  width: 100%;
-  padding: 0.95rem 1.5rem;
-  font-size: 1.05rem;
+.app-confirm-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* Google OAuth Domain Restriction Alert Box */
+.domain-restricted-card {
+  background: #FEF2F2;
+  border: 1.5px solid #F87171;
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  text-align: center;
+  color: #991B1B;
+  margin-bottom: 1.25rem;
+  animation: fadeIn 0.3s ease;
+}
+
+.domain-restricted-card .dr-icon {
+  font-size: 2.25rem;
+  margin-bottom: 0.35rem;
+}
+
+.domain-restricted-card .dr-title {
   font-weight: 700;
-  font-family: var(--font-main);
-  color: #FFFFFF;
-  background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%);
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
-  transition: all 0.2s ease;
+  font-size: 1.05rem;
+  margin-bottom: 0.25rem;
+}
+
+.domain-restricted-card .dr-desc {
+  font-size: 0.85rem;
+  color: #7F1D1D;
+  line-height: 1.5;
+}
+
+/* Google Login Button Styling */
+.google-login-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin: 1.5rem 0 1rem;
+}
+
+.btn-google-sso {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 12px;
+  width: 100%;
+  padding: 0.85rem 1.25rem;
+  background: #FFFFFF;
+  color: #1F2937;
+  border: 1.5px solid #D1D5DB;
+  border-radius: 12px;
+  font-family: var(--font-main);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
 }
 
-.btn-lockdown-resume:hover {
-  background: linear-gradient(135deg, #EF4444 0%, #B91C1C 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(220, 38, 38, 0.6);
+.btn-google-sso:hover {
+  background: #F9FAFB;
+  border-color: #9CA3AF;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+}
+
+.google-icon-svg {
+  width: 22px;
+  height: 22px;
 }
 
 /* Responsive */

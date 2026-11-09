@@ -88,3 +88,19 @@ CREATE TABLE IF NOT EXISTS system_settings (
     setting_value TEXT,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 5. ตารางข้อมูลผู้ใช้งานจาก Google OAuth 2.0 (users)
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    full_name VARCHAR(255) NOT NULL,
+    student_id VARCHAR(50) NOT NULL,
+    google_id VARCHAR(255) DEFAULT '',
+    role VARCHAR(50) NOT NULL DEFAULT 'student', -- 'student' หรือ 'admin'
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_student_id ON users(student_id);
+CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);

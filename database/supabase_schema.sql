@@ -84,19 +84,36 @@ CREATE TABLE IF NOT EXISTS public.system_settings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 5. กำหนดสิทธิ์การเข้าถึงผ่าน Supabase Data API (PostgREST) สำหรับ role anon และ authenticated
+-- 5. ตารางข้อมูลผู้ใช้งานจาก Google OAuth 2.0 (users)
+CREATE TABLE IF NOT EXISTS public.users (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  full_name TEXT NOT NULL,
+  student_id TEXT NOT NULL,
+  google_id TEXT DEFAULT '',
+  role TEXT NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'admin')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_email ON public.users (email);
+CREATE INDEX IF NOT EXISTS idx_users_student_id ON public.users (student_id);
+
+-- 6. กำหนดสิทธิ์การเข้าถึงผ่าน Supabase Data API (PostgREST) สำหรับ role anon และ authenticated
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.students TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.assessments TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.admins TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.system_settings TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.users TO anon, authenticated;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
 
--- 6. เปิดใช้งาน Row Level Security (RLS) และสร้าง Policy สำหรับเว็บแอปพลิเคชัน
+-- 7. เปิดใช้งาน Row Level Security (RLS) และสร้าง Policy สำหรับเว็บแอปพลิเคชัน
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assessments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admins ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "psuwit_students_access" ON public.students;
 CREATE POLICY "psuwit_students_access" ON public.students
@@ -118,6 +135,12 @@ CREATE POLICY "psuwit_admins_access" ON public.admins
 
 DROP POLICY IF EXISTS "psuwit_settings_access" ON public.system_settings;
 CREATE POLICY "psuwit_settings_access" ON public.system_settings
+  FOR ALL TO anon, authenticated
+  USING (true)
+  WITH CHECK (true);
+
+DROP POLICY IF EXISTS "psuwit_users_access" ON public.users;
+CREATE POLICY "psuwit_users_access" ON public.users
   FOR ALL TO anon, authenticated
   USING (true)
   WITH CHECK (true);

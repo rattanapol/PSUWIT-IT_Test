@@ -68,7 +68,7 @@ const App = {
         if (!this.currentUser) return;
         const adminRecord = await DB.findAdmin(this.currentUser.email || this.currentUser.username);
         if (!adminRecord) {
-          alert("🚫 เฉพาะบัญชีผู้ดูแลระบบที่ได้รับอนุญาตเท่านั้น");
+          console.warn("🚫 เฉพาะบัญชีผู้ดูแลระบบที่ได้รับอนุญาตเท่านั้น");
           return;
         }
         this.switchView("view-admin");
@@ -81,43 +81,46 @@ const App = {
       btn.addEventListener("click", () => this.logout());
     });
 
-    // ปุ่มเริ่มทำแบบทดสอบ
+    // เริ่มต้นระบบ Google OAuth 2.0
+    this.initGoogleAuth();
+
+    // ปุ่มเริ่มทำแบบทดสอบ (เปิด Modal ยืนยันในหน้าเว็บ แทนการใช้ window.confirm)
     const startPreBtn = document.getElementById("btnStartPretest");
     if (startPreBtn) {
-      startPreBtn.addEventListener("click", () => this.startAssessment("Pre-test"));
+      startPreBtn.addEventListener("click", () => this.openConfirmStartModal("Pre-test"));
     }
 
     const startPostBtn = document.getElementById("btnStartPosttest");
     if (startPostBtn) {
-      startPostBtn.addEventListener("click", () => this.startAssessment("Post-test"));
+      startPostBtn.addEventListener("click", () => this.openConfirmStartModal("Post-test"));
     }
 
-    // ปุ่มส่งคำตอบในหน้าสอบ
+    // ปุ่มแอ็กชันใน Modal เริ่มสอบ
+    const btnConfirmStart = document.getElementById("btnConfirmStartExamAction");
+    if (btnConfirmStart) {
+      btnConfirmStart.addEventListener("click", () => {
+        this.closeConfirmStartModal();
+        if (this._pendingTestType) {
+          this.executeStartAssessment(this._pendingTestType);
+        }
+      });
+    }
+
+    // ปุ่มส่งคำตอบในหน้าสอบ (เปิด Modal ยืนยันในหน้าเว็บ แทนการใช้ window.confirm)
     const submitBtn = document.getElementById("btnSubmitAssessment");
     if (submitBtn) {
       submitBtn.addEventListener("click", () => {
         if (!this.currentSession || this.currentSession.isSubmitted) return;
+        this.openConfirmSubmitModal();
+      });
+    }
 
-        const answered = this.currentSession.getAnsweredCount();
-        const total = this.currentSession.getTotalQuestions();
-
-        this.currentSession._isShowingDialog = true;
-        let confirmed = false;
-        try {
-          if (answered < total) {
-            confirmed = confirm(`คุณตอบไปแล้ว ${answered}/${total} ข้อ ยังมีข้อที่ยังไม่ได้ตอบ ต้องการยืนยันส่งข้อสอบหรือไม่?`);
-          } else {
-            confirmed = confirm("คุณต้องการส่งแบบทดสอบเพื่อบันทึกผลและดูคะแนนใช่หรือไม่?");
-          }
-        } finally {
-          setTimeout(() => {
-            if (this.currentSession) {
-              this.currentSession._isShowingDialog = false;
-            }
-          }, 600);
-        }
-
-        if (confirmed) {
+    // ปุ่มแอ็กชันใน Modal ส่งข้อสอบ
+    const btnConfirmSubmit = document.getElementById("btnConfirmSubmitExamAction");
+    if (btnConfirmSubmit) {
+      btnConfirmSubmit.addEventListener("click", () => {
+        this.closeConfirmSubmitModal();
+        if (this.currentSession && !this.currentSession.isSubmitted) {
           this.currentSession.submit();
         }
       });
@@ -213,6 +216,157 @@ const App = {
     }
   },
 
+  // ==============================================================
+  // GOOGLE OAUTH 2.0 & DOMAIN RESTRICTION (@psuwit.ac.th)
+  // ==============================================================
+
+  // เริ่มต้นระบบ Google Identity Services (GIS)
+  async initGoogleAuth() {
+    try {
+      const cfg = await DB.getAuthConfig();
+      if (cfg && cfg.googleClientId) {
+        this.googleClientId = cfg.googleClientId;
+      }
+    } catch (e) {
+      console.warn("Could not fetch auth config:", e);
+    }
+
+    const clientId = this.googleClientId || APP_CONFIG.googleClientId;
+
+    if (window.google && window.google.accounts && window.google.accounts.id) {
+      try {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (res) => this.handleGoogleCredentialResponse(res),
+          hosted_domain: "psuwit.ac.th",
+          auto_select: false,
+          cancel_on_tap_outside: true
+        });
+
+        const btnContainer = document.getElementById("googleSignInBtnContainer");
+        if (btnContainer && clientId && !clientId.includes("YOUR_")) {
+          window.google.accounts.id.renderButton(btnContainer, {
+            type: "standard",
+            theme: "outline",
+            size: "large",
+            text: "signin_with",
+            shape: "pill",
+            width: 280
+          });
+          const directBtn = document.getElementById("btnGoogleSignInDirect");
+          if (directBtn) directBtn.style.display = "none";
+        }
+      } catch (err) {
+        console.warn("Google ID init error:", err);
+      }
+    }
+  },
+
+  // คลิกปุ่มล็อกอินด้วย Google
+  triggerGoogleSignIn() {
+    this.resetLoginState();
+    const clientId = this.googleClientId || APP_CONFIG.googleClientId;
+    if (window.google && window.google.accounts && window.google.accounts.id && clientId && !clientId.includes("YOUR_")) {
+      window.google.accounts.id.prompt((notification) => {
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+          this.openLocalhostTestModal();
+        }
+      });
+    } else {
+      // หากยังไม่ได้ตั้งค่า Google Client ID จริง หรือทดสอบบน Localhost
+      this.openLocalhostTestModal();
+    }
+  },
+
+  // จัดการ Credential Response จาก Google Identity Services
+  async handleGoogleCredentialResponse(response) {
+    this.resetLoginState();
+    const res = await DB.authenticateGoogleUser({ credential: response.credential });
+    this.processAuthResult(res);
+  },
+
+  // ประมวลผลผลลัพธ์การยืนยันตัวตน
+  processAuthResult(res) {
+    if (!res.success) {
+      if (res.code === "DOMAIN_RESTRICTED" || (res.message && res.message.includes("เฉพาะนักเรียน/บุคลากรภายในองค์กร"))) {
+        this.showDomainRestrictionAlert(res.message);
+      } else {
+        const errBanner = document.getElementById("studentAuthErrorBanner");
+        if (errBanner) {
+          errBanner.textContent = res.message || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ";
+          errBanner.classList.remove("hidden");
+        }
+      }
+      return;
+    }
+
+    this.currentUser = res.user;
+    localStorage.setItem(APP_CONFIG.storageKeys.currentUser, JSON.stringify(this.currentUser));
+
+    if (this.currentUser.role === "admin") {
+      this.switchView("view-admin");
+      AdminController.init();
+    } else {
+      this.switchView("view-student-portal");
+      this.renderStudentPortal();
+    }
+  },
+
+  // แสดงกล่องแจ้งเตือนการปฏิเสธการเข้าใช้งานเนื่องจากโดเมนไม่ถูกต้อง (Domain Restricted)
+  showDomainRestrictionAlert(msg) {
+    const alertBox = document.getElementById("domainRestrictionAlert");
+    const textEl = document.getElementById("domainAlertText");
+    if (textEl && msg) textEl.textContent = msg;
+    if (alertBox) {
+      alertBox.classList.remove("hidden");
+      alertBox.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  },
+
+  // รีเซ็ตการแจ้งเตือนในหน้า Login
+  resetLoginState() {
+    const alertBox = document.getElementById("domainRestrictionAlert");
+    if (alertBox) alertBox.classList.add("hidden");
+    const errBanner = document.getElementById("studentAuthErrorBanner");
+    if (errBanner) errBanner.classList.add("hidden");
+    const adminErrBanner = document.getElementById("adminAuthErrorBanner");
+    if (adminErrBanner) adminErrBanner.classList.add("hidden");
+  },
+
+  // Modal เครื่องมือทดสอบบน Localhost
+  openLocalhostTestModal() {
+    this.resetLoginState();
+    const modal = document.getElementById("modalLocalhostGoogleTest");
+    if (modal) modal.classList.add("active");
+  },
+
+  closeLocalhostTestModal() {
+    const modal = document.getElementById("modalLocalhostGoogleTest");
+    if (modal) modal.classList.remove("active");
+  },
+
+  // จำลองการเข้าสู่ระบบของบัญชี Google ต่างๆ บน Localhost
+  async simulateGoogleLogin(email, name) {
+    this.closeLocalhostTestModal();
+    this.resetLoginState();
+    const res = await DB.authenticateGoogleUser({ email, name });
+    this.processAuthResult(res);
+  },
+
+  simulateCustomGoogleLogin() {
+    const input = document.getElementById("inputCustomTestEmail");
+    const email = input ? input.value.trim() : "";
+    if (!email) return;
+    this.simulateGoogleLogin(email, "ผู้ทดสอบ " + email.split("@")[0]);
+  },
+
+  toggleAdminFallbackForm() {
+    const box = document.getElementById("adminFallbackContainer");
+    if (box) {
+      box.classList.toggle("hidden");
+    }
+  },
+
   // ล็อกอินฝั่งนักเรียนด้วย Username และ Password
   async handleStudentCredentialsLogin() {
     const usernameInput = document.getElementById("loginStudentUsername").value.trim();
@@ -225,8 +379,6 @@ const App = {
       if (errBanner) {
         errBanner.textContent = res.message;
         errBanner.classList.remove("hidden");
-      } else {
-        alert(res.message);
       }
       return;
     }
@@ -256,8 +408,6 @@ const App = {
       if (errBanner) {
         errBanner.textContent = res.message;
         errBanner.classList.remove("hidden");
-      } else {
-        alert(res.message);
       }
       return;
     }
@@ -320,10 +470,7 @@ const App = {
     const feedback = document.getElementById("changePwdFeedback");
 
     const showMsg = (msg, isSuccess = false) => {
-      if (!feedback) {
-        alert(msg);
-        return;
-      }
+      if (!feedback) return;
       feedback.textContent = msg;
       feedback.className = isSuccess
         ? "p-3 mb-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-semibold"
@@ -365,14 +512,12 @@ const App = {
   // ออกจากระบบ
   logout() {
     if (this.currentSession && !this.currentSession.isSubmitted) {
-      if (!confirm("ขณะนี้กำลังอยู่ในระหว่างการสอบ หากออกจากระบบการสอบจะสิ้นสุดทันที ต้องการออกหรือไม่?")) {
-        return;
-      }
       this.currentSession.detachAntiCheatListeners();
     }
     this.currentUser = null;
     this.currentSession = null;
     localStorage.removeItem(APP_CONFIG.storageKeys.currentUser);
+    this.resetLoginState();
     this.switchView("view-auth");
   },
 
@@ -620,19 +765,43 @@ const App = {
     }
   },
 
-  // เริ่มต้นเข้าสู่ห้องสอบ
-  async startAssessment(testType) {
-    if (!this.currentUser) return;
+  // ==============================================================
+  // ASSESSMENT MODALS & FLOW (แทนที่ window.confirm & alert)
+  // ==============================================================
 
-    if (!confirm(`คุณกำลังจะเริ่มทำแบบทดสอบ ${testType} สำหรับระดับชั้น ${this.currentUser.grade}\n\n🔒 โหมดล็อกหน้าจอสอบเข้มงวด (Strict Exam Lockdown):\n1. ระบบจะบังคับใช้โหมดเต็มหน้าจอ (Fullscreen) และบล็อกการสลับหน้าต่างทันที\n2. ห้ามสลับหน้าจอ, ห้ามเปิดแท็บอื่น, ห้ามเปิดโปรแกรมอื่นเด็ดขาด\n3. หากหลุดออกจากหน้าจอสอบ หรือสลับโปรแกรม ระบบจะขึ้นม่านล็อกหน้าจอฉุกเฉินและส่งเสียงเตือนทันที\n4. มีเวลาทำแบบทดสอบ 15 นาที (จำนวน 15 ข้อ คะแนนเต็ม 75 คะแนน)\n\nพร้อมแล้วกด ตกลง เพื่อเริ่มสอบและล็อกหน้าจอ`)) {
-      return;
+  // เปิด Modal ยืนยันก่อนเริ่มทำแบบทดสอบ
+  openConfirmStartModal(testType) {
+    if (!this.currentUser) return;
+    this._pendingTestType = testType;
+    const titleEl = document.getElementById("confirmStartExamTitle");
+    const descEl = document.getElementById("confirmStartExamDesc");
+    const grade = this.currentUser.grade || "";
+
+    if (titleEl) {
+      titleEl.textContent = `เริ่มทำแบบทดสอบ ${testType} (${grade})`;
+    }
+    if (descEl) {
+      descEl.innerHTML = `
+        คุณกำลังจะเริ่มทำแบบทดสอบ <strong>${testType}</strong> สำหรับระดับชั้น <strong>${grade}</strong><br>
+        • มีเวลา 15 นาที (จำนวน 15 ข้อ รวม 75 คะแนน)<br>
+        • <strong>ไม่อนุญาตให้คัดลอกข้อสอบหรือตัวเลือกคำตอบเพื่อไปค้นหาเฉลย</strong><br>
+        • พร้อมแล้วกดปุ่มยืนยันด้านล่างเพื่อเริ่มทำแบบทดสอบ
+      `;
     }
 
-    // ล็อกหน้าจอทันที
-    document.body.classList.add("exam-lockdown-active");
-    document.body.classList.remove("exam-blurred");
-    const overlay = document.getElementById("examLockdownOverlay");
-    if (overlay) overlay.classList.add("hidden");
+    const modal = document.getElementById("modalConfirmStartExam");
+    if (modal) modal.classList.add("active");
+  },
+
+  closeConfirmStartModal() {
+    const modal = document.getElementById("modalConfirmStartExam");
+    if (modal) modal.classList.remove("active");
+  },
+
+  // เริ่มต้นทำแบบทดสอบ (หลังจากผู้ใช้กดยืนยันใน Modal)
+  async executeStartAssessment(testType) {
+    if (!this.currentUser) return;
+    this.closeConfirmStartModal();
 
     this.currentSession = new AssessmentSession({
       student: this.currentUser,
@@ -654,33 +823,6 @@ const App = {
           progressEl.style.width = `${data.percent}%`;
         }
       },
-      onViolation: (data) => {
-        // 1. อัปเดตแถบแจ้งเตือนด้านบน
-        const violationBanner = document.getElementById("examViolationBanner");
-        if (violationBanner) {
-          violationBanner.classList.remove("hidden");
-          violationBanner.innerHTML = `
-            <div>
-              🚨 คำเตือนความปลอดภัย (ครั้งที่ <strong>${data.violationsCount} / ${data.maxViolations}</strong>): ${data.reason}
-            </div>
-            <div class="text-xs mt-1">หากตรวจพบครบ ${data.maxViolations} ครั้ง ระบบจะส่งข้อสอบและยุติการสอบทันที!</div>
-          `;
-          violationBanner.style.animation = "none";
-          setTimeout(() => {
-            violationBanner.style.animation = "pulse 1s infinite";
-          }, 10);
-        }
-
-        // 2. แสดงม่านบล็อกหน้าจอแบบเบ็ดเสร็จ (Lockdown Curtain Overlay)
-        const overlay = document.getElementById("examLockdownOverlay");
-        const pill = document.getElementById("lockdownViolationPill");
-        const reasonText = document.getElementById("lockdownViolationReason");
-        if (overlay) {
-          if (pill) pill.textContent = `ครั้งที่ ${data.violationsCount} / ${data.maxViolations}`;
-          if (reasonText) reasonText.textContent = data.reason;
-          overlay.classList.remove("hidden");
-        }
-      },
       onSubmit: async (result) => {
         await this.handleAssessmentSubmission(result);
       }
@@ -689,7 +831,6 @@ const App = {
     this.switchView("view-assessment");
     this.renderAssessmentView();
 
-    // เริ่มต้นและร้องขอ Fullscreen ใน context ของ user click ทันที
     try {
       await this.currentSession.start();
     } catch (err) {
@@ -697,19 +838,48 @@ const App = {
     }
   },
 
-  // ปลดล็อกหน้าจอและกลับเข้าสู่โหมดเต็มหน้าจอ
-  async resumeExamFullscreen() {
-    if (this.currentSession && !this.currentSession.isSubmitted) {
-      await this.currentSession.requestExamFullscreen();
-      this.currentSession.resolveLockdown();
+  // คง method startAssessment ไว้เพื่อความเข้ากันได้
+  startAssessment(testType) {
+    this.openConfirmStartModal(testType);
+  },
+
+  // เปิด Modal ยืนยันส่งคำตอบ
+  openConfirmSubmitModal() {
+    if (!this.currentSession || this.currentSession.isSubmitted) return;
+    const answered = this.currentSession.getAnsweredCount();
+    const total = this.currentSession.questions.length;
+    const descEl = document.getElementById("confirmSubmitExamDesc");
+
+    if (descEl) {
+      if (answered < total) {
+        descEl.innerHTML = `
+          คุณตอบไปแล้ว <strong class="text-indigo-600">${answered}</strong> จาก <strong class="text-indigo-600">${total}</strong> ข้อ<br>
+          <span style="color: #D97706; font-weight: 600;">⚠️ ยังมีข้อที่ยังไม่ได้ตอบอีก ${total - answered} ข้อ</span><br>
+          ต้องการยืนยันการส่งแบบทดสอบเลยหรือไม่?
+        `;
+      } else {
+        descEl.innerHTML = `
+          คุณตอบครบทั้งหมด <strong>${total} / ${total}</strong> ข้อแล้ว 🎉<br>
+          ต้องการส่งแบบทดสอบเพื่อบันทึกผลและดูคะแนนใช่หรือไม่?
+        `;
+      }
     }
+
+    const modal = document.getElementById("modalConfirmSubmitExam");
+    if (modal) modal.classList.add("active");
+  },
+
+  closeConfirmSubmitModal() {
+    const modal = document.getElementById("modalConfirmSubmitExam");
+    if (modal) modal.classList.remove("active");
   },
 
   // เรนเดอร์หน้าจอทำข้อสอบ
   renderAssessmentView() {
     const session = this.currentSession;
     document.getElementById("examHeaderTitle").textContent = `แบบทดสอบสมรรถนะ IT (${session.testType}) - ระดับชั้น ${session.grade}`;
-    document.getElementById("examViolationBanner").classList.add("hidden");
+    const noticeBanner = document.getElementById("examNoticeBanner");
+    if (noticeBanner) noticeBanner.classList.remove("hidden");
 
     this.renderQuestionList();
     this.renderCurrentQuestion();
@@ -805,11 +975,8 @@ const App = {
   // เมื่อส่งแบบทดสอบสำเร็จ
   async handleAssessmentSubmission(result) {
     try {
-      // 1. ปลดล็อกหน้าจอและปิดม่านฉุกเฉินทันที
-      document.body.classList.remove("exam-lockdown-active");
-      document.body.classList.remove("exam-blurred");
-      const overlay = document.getElementById("examLockdownOverlay");
-      if (overlay) overlay.classList.add("hidden");
+      // 1. ปิด Modal ยืนยันส่งคำตอบ (ถ้าเปิดค้างอยู่)
+      this.closeConfirmSubmitModal();
 
       // 2. สลับไปหน้ารายงานผลทันที (Instant Transition) ไม่ต้องรอเน็ตเวิร์ก
       this.currentResult = result;

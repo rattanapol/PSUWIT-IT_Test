@@ -1002,6 +1002,135 @@ ON CONFLICT (email) DO NOTHING;
     };
   },
 
+  // ดึงการตั้งค่า Auth จากเซิร์ฟเวอร์ (เช่น GOOGLE_CLIENT_ID จาก .env)
+  async getAuthConfig() {
+    if (this.canUseServer()) {
+      try {
+        const res = await fetch("/api/auth/config");
+        if (res.ok) {
+          const json = await res.json();
+          if (json && json.status === "success") {
+            return json.data;
+          }
+        }
+      } catch (e) {
+        console.warn("getAuthConfig fetch error:", e);
+      }
+    }
+    return {
+      googleClientId: (typeof APP_CONFIG !== "undefined" && APP_CONFIG.googleClientId) || "",
+      hostedDomain: "psuwit.ac.th"
+    };
+  },
+
+  // เข้าสู่ระบบด้วย Google OAuth 2.0 พร้อมระบบ Domain Restriction (@psuwit.ac.th เท่านั้น)
+  async authenticateGoogleUser(payload) {
+    // 1. ตรวจสอบผ่านเซิร์ฟเวอร์ Backend (/api/auth/google) หากเซิร์ฟเวอร์พร้อมใช้งาน
+    if (this.canUseServer()) {
+      try {
+        const res = await fetch("/api/auth/google", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const json = await res.json();
+        if (res.status === 403 || json.error_code === "DOMAIN_RESTRICTED") {
+          return {
+            success: false,
+            error_code: "DOMAIN_RESTRICTED",
+            message: json.message || "อนุญาตเฉพาะนักเรียน/บุคลากรภายในองค์กรเท่านั้น"
+          };
+        }
+        if (res.ok && json.status === "success" && json.data) {
+          this.serverAvailable = true;
+          return { success: true, user: json.data };
+        }
+        if (!res.ok) {
+          return {
+            success: false,
+            message: json.message || "ไม่สามารถเข้าสู่ระบบด้วย Google ได้"
+          };
+        }
+      } catch (err) {
+        // หากเน็ตเวิร์กเซิร์ฟเวอร์ขัดข้อง ให้ใช้การตรวจสอบฝั่งไคลเอนต์ต่อไป
+      }
+    }
+
+    // 2. Client-side Processing & Domain Validation
+    let email = (payload.email || "").trim().toLowerCase();
+    let name = payload.name || payload.full_name || email.split("@")[0];
+    let googleId = payload.google_id || "";
+
+    if (payload.credential && typeof payload.credential === "string") {
+      try {
+        const parts = payload.credential.split(".");
+        if (parts.length >= 2) {
+          const dec = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+          email = (dec.email || "").trim().toLowerCase();
+          name = dec.name || dec.given_name || email.split("@")[0];
+          googleId = dec.sub || "";
+        }
+      } catch (e) {}
+    }
+
+    // [สำคัญ] ตรวจสอบ Domain Restriction: ต้องลงท้ายด้วย @psuwit.ac.th เท่านั้น
+    if (!email || !email.endsWith("@psuwit.ac.th")) {
+      return {
+        success: false,
+        error_code: "DOMAIN_RESTRICTED",
+        message: "อนุญาตเฉพาะนักเรียน/บุคลากรภายในองค์กรเท่านั้น"
+      };
+    }
+
+    // สกัดรหัสนักเรียน/บุคลากรจากชื่อส่วนหน้าของอีเมล (เช่น จาก 50015@psuwit.ac.th -> 50015)
+    const studentId = email.split("@")[0];
+    const isAdmin = Boolean(await this.findAdmin(email));
+    const role = isAdmin ? "admin" : "student";
+
+    const userProfile = {
+      student_id: studentId,
+      name: name,
+      email: email,
+      username: email,
+      google_id: googleId,
+      role: role,
+      grade: "ม.1",
+      room: "",
+      status: "active"
+    };
+
+    // ค้นหาข้อมูลนักเรียนเดิมเพื่อดึงระดับชั้นและห้องเรียน
+    const existingStudent = await this.findStudent(email);
+    if (existingStudent) {
+      userProfile.grade = existingStudent.grade || "ม.1";
+      userProfile.room = existingStudent.room || "";
+      userProfile.class_no = existingStudent.class_no || "";
+      userProfile.pretest_completed = Boolean(existingStudent.pretest_completed);
+      userProfile.posttest_completed = Boolean(existingStudent.posttest_completed);
+    }
+
+    // บันทึกลง Supabase ตาราง users (หากมีการเชื่อมต่อ)
+    if (this.hasSupabase()) {
+      const sb = this.getSupabaseClient();
+      if (sb) {
+        try {
+          await sb.from("users").upsert([
+            {
+              email: email,
+              full_name: name,
+              student_id: studentId,
+              google_id: googleId,
+              role: role,
+              updated_at: new Date().toISOString()
+            }
+          ], { onConflict: "email" });
+        } catch (e) {}
+      }
+    }
+
+    return { success: true, user: userProfile };
+  },
+
   // เปลี่ยนรหัสผ่านด้วยตนเอง (หรือรีเซ็ตโดย Admin)
   async changePassword(rawUsername, currentPassword, newPassword, isAdminReset = false) {
     const candidates = this.normalizeUsernameCandidates(rawUsername);

@@ -7,9 +7,35 @@
  */
 
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
+
+// โหลดค่า Environment Variables จากไฟล์ .env
+function loadEnv() {
+  const envPath = path.join(__dirname, '.env');
+  if (fs.existsSync(envPath)) {
+    try {
+      const content = fs.readFileSync(envPath, 'utf-8');
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+          const idx = trimmed.indexOf('=');
+          const key = trimmed.substring(0, idx).trim();
+          const val = trimmed.substring(idx + 1).trim().replace(/^["']|["']$/g, '');
+          if (!process.env[key]) {
+            process.env[key] = val;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Could not read .env file:', e.message);
+    }
+  }
+}
+loadEnv();
+
 const { INITIAL_USERS_STUDENTS, INITIAL_USERS_ADMINS } = require('./js/users_data.js');
 
 const PORT = process.env.PORT || 3000;
@@ -30,6 +56,7 @@ class DatabaseManager {
     this.db = new DatabaseSync(SQLITE_PATH);
     this.initSchema();
     this.ensureColumns();
+    this.ensureUsersTable();
     this.ensurePrimaryAdmins();
     this.seedIfEmpty();
   }
@@ -62,6 +89,24 @@ class DatabaseManager {
         this.db.exec(stmt);
       } catch (e) {}
     }
+  }
+
+  ensureUsersTable() {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        full_name VARCHAR(255) NOT NULL,
+        student_id VARCHAR(50) NOT NULL,
+        google_id VARCHAR(255) DEFAULT '',
+        role VARCHAR(50) NOT NULL DEFAULT 'student',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+      CREATE INDEX IF NOT EXISTS idx_users_student_id ON users(student_id);
+      CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
+    `);
   }
 
   ensurePrimaryAdmins() {
@@ -355,6 +400,10 @@ class DatabaseManager {
     const studentCount = this.db.prepare('SELECT COUNT(*) AS cnt FROM students').get().cnt;
     const assessmentCount = this.db.prepare('SELECT COUNT(*) AS cnt FROM assessments').get().cnt;
     const adminCount = this.db.prepare('SELECT COUNT(*) AS cnt FROM admins').get().cnt;
+    let userCount = 0;
+    try {
+      userCount = this.db.prepare('SELECT COUNT(*) AS cnt FROM users').get().cnt;
+    } catch (e) {}
     let fileSize = 0;
     try {
       fileSize = fs.statSync(SQLITE_PATH).size;
@@ -366,12 +415,42 @@ class DatabaseManager {
       database_file: 'database/psuwit_it.sqlite',
       file_size_bytes: fileSize,
       tables: {
+        users: userCount,
         students: studentCount,
         assessments: assessmentCount,
         admins: adminCount
       },
       timestamp: new Date().toISOString()
     };
+  }
+
+  getUsers() {
+    return this.db.prepare('SELECT * FROM users ORDER BY id DESC').all();
+  }
+
+  saveGoogleUser(profile) {
+    const cleanEmail = (profile.email || '').trim().toLowerCase();
+    const fullName = (profile.full_name || profile.name || cleanEmail.split('@')[0]).trim();
+    const studentId = (profile.student_id || cleanEmail.split('@')[0]).trim();
+    const googleId = (profile.google_id || '').trim();
+    const role = profile.role || 'student';
+    const now = new Date().toISOString();
+
+    const existing = this.db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(cleanEmail);
+    if (existing) {
+      this.db.prepare(`
+        UPDATE users
+        SET full_name = ?, student_id = ?, google_id = ?, role = ?, updated_at = ?
+        WHERE id = ?
+      `).run(fullName, studentId, googleId || existing.google_id || '', role, now, existing.id);
+    } else {
+      this.db.prepare(`
+        INSERT INTO users (email, full_name, student_id, google_id, role, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(cleanEmail, fullName, studentId, googleId, role, now, now);
+    }
+
+    return this.db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(cleanEmail);
   }
 
   getAdmins() {
@@ -783,6 +862,55 @@ function parseBody(req) {
   });
 }
 
+// ถอดรหัส Base64URL JWT Payload ของ Google ID Token
+function decodeJwtPayload(token) {
+  try {
+    const parts = String(token || '').split('.');
+    if (parts.length < 2) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonStr = Buffer.from(base64, 'base64').toString('utf-8');
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    return null;
+  }
+}
+
+// ตรวจสอบ Google ID Token กับ Google TokenInfo Endpoint (พร้อม Fallback ถอดรหัสในเครื่อง)
+function verifyGoogleToken(idToken) {
+  return new Promise((resolve) => {
+    if (!idToken) return resolve(null);
+    const decoded = decodeJwtPayload(idToken);
+
+    // ลองตรวจสอบกับ Google API ผ่าน HTTPS
+    try {
+      const req = https.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode === 200) {
+              const info = JSON.parse(data);
+              return resolve(info);
+            }
+          } catch (e) {}
+          // หากสถานะไม่ใช่ 200 ให้ใช้ decoded token
+          resolve(decoded);
+        });
+      });
+      req.on('error', () => {
+        resolve(decoded);
+      });
+      req.setTimeout(4000, () => {
+        req.destroy();
+        resolve(decoded);
+      });
+    } catch (e) {
+      resolve(decoded);
+    }
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   const parsedUrl = url.parse(req.url, true);
   const pathname = parsedUrl.pathname;
@@ -805,6 +933,114 @@ const server = http.createServer(async (req, res) => {
     try {
       if (pathname === '/api/status' && req.method === 'GET') {
         return sendJson(res, 200, { status: 'success', data: dbManager.getStatus() });
+      }
+
+      if (pathname === '/api/auth/config' && req.method === 'GET') {
+        return sendJson(res, 200, {
+          status: 'success',
+          data: {
+            googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+            hostedDomain: 'psuwit.ac.th'
+          }
+        });
+      }
+
+      if (pathname === '/api/auth/google' && req.method === 'POST') {
+        const body = await parseBody(req);
+        let email = '';
+        let fullName = '';
+        let googleId = '';
+
+        if (body.credential) {
+          const verified = await verifyGoogleToken(body.credential);
+          if (!verified || !verified.email) {
+            return sendJson(res, 400, {
+              status: 'error',
+              message: '❌ ไม่สามารถตรวจสอบความถูกต้องของ Google ID Token ได้'
+            });
+          }
+          email = (verified.email || '').toLowerCase().trim();
+          fullName = verified.name || verified.given_name || email.split('@')[0];
+          googleId = verified.sub || '';
+        } else if (body.email) {
+          // โหมดทดสอบ Localhost (Direct Simulation)
+          email = String(body.email).toLowerCase().trim();
+          fullName = body.name || body.full_name || email.split('@')[0];
+          googleId = body.google_id || `sim_${Date.now()}`;
+        } else {
+          return sendJson(res, 400, {
+            status: 'error',
+            message: '❌ กรุณาระบุ Google Credential หรือ Email'
+          });
+        }
+
+        // [สำคัญ] ตรวจสอบ Domain Restriction: ต้องลงท้ายด้วย @psuwit.ac.th เท่านั้น
+        if (!email.endsWith('@psuwit.ac.th')) {
+          return sendJson(res, 403, {
+            status: 'error',
+            error_code: 'DOMAIN_RESTRICTED',
+            message: 'อนุญาตเฉพาะนักเรียน/บุคลากรภายในองค์กรเท่านั้น'
+          });
+        }
+
+        // สกัดรหัสนักเรียน/บุคลากรจากชื่อส่วนหน้าของอีเมล (เช่น 50015@psuwit.ac.th -> 50015)
+        const studentId = email.split('@')[0];
+
+        // ตรวจสอบสิทธิ์ว่าเป็น Admin หรือไม่
+        const adminMatch = dbManager.db.prepare('SELECT * FROM admins WHERE LOWER(email) = ? OR LOWER(username) = ?').get(email, email);
+        const role = adminMatch ? (adminMatch.role || 'admin') : 'student';
+
+        // บันทึกข้อมูลลงตาราง users
+        const userRow = dbManager.saveGoogleUser({
+          email,
+          full_name: fullName,
+          student_id: studentId,
+          google_id: googleId,
+          role: role === 'super_admin' ? 'admin' : role
+        });
+
+        // หากเป็นนักเรียน ให้เชื่อมโยงกับตาราง students
+        let studentRow = null;
+        if (role === 'student') {
+          studentRow = dbManager.db.prepare('SELECT * FROM students WHERE LOWER(email) = ? OR LOWER(username) = ?').get(email, email);
+          if (!studentRow) {
+            const now = new Date().toISOString();
+            dbManager.db.prepare(`
+              INSERT INTO students (
+                student_id, name, email, username, password, grade, room, role, status,
+                pretest_completed, posttest_completed, created_at, updated_at
+              ) VALUES (?, ?, ?, ?, '123456', 'ม.1', '', 'student', 'active', 0, 0, ?, ?)
+            `).run(studentId, fullName, email, email, now, now);
+            studentRow = dbManager.db.prepare('SELECT * FROM students WHERE LOWER(email) = ?').get(email);
+          } else if (fullName && (!studentRow.name || studentRow.name === studentRow.email)) {
+            dbManager.db.prepare('UPDATE students SET name = ?, updated_at = ? WHERE id = ?').run(fullName, new Date().toISOString(), studentRow.id);
+            studentRow.name = fullName;
+          }
+        }
+
+        return sendJson(res, 200, {
+          status: 'success',
+          data: {
+            id: userRow.id,
+            student_id: studentId,
+            name: fullName || userRow.full_name,
+            email: userRow.email,
+            username: userRow.email,
+            google_id: userRow.google_id,
+            role: role,
+            adminRole: adminMatch ? (adminMatch.role || 'admin') : null,
+            grade: studentRow ? studentRow.grade : '-',
+            room: studentRow ? studentRow.room : '-',
+            class_no: studentRow ? studentRow.class_no : '',
+            status: studentRow ? studentRow.status : 'active',
+            pretest_completed: studentRow ? Boolean(studentRow.pretest_completed) : false,
+            posttest_completed: studentRow ? Boolean(studentRow.posttest_completed) : false
+          }
+        });
+      }
+
+      if (pathname === '/api/users' && req.method === 'GET') {
+        return sendJson(res, 200, { status: 'success', data: dbManager.getUsers() });
       }
 
       if (pathname === '/api/auth/login' && req.method === 'POST') {

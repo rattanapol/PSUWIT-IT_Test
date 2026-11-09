@@ -59,95 +59,31 @@ class AssessmentSession {
     return arr;
   }
 
-  // เริ่มต้นการสอบและเปิดระบบจับตาความปลอดภัย
-  async start() {
+  // เริ่มต้นการสอบและเปิดระบบป้องกันการคัดลอกข้อสอบ
+  start() {
     this.startTimer();
     this.attachAntiCheatListeners();
-    await this.requestExamFullscreen();
   }
 
-  // ร้องขอโหมดเต็มหน้าจอและล็อกคีย์บอร์ด
-  async requestExamFullscreen() {
-    const docEl = document.documentElement;
-    try {
-      if (docEl.requestFullscreen) {
-        await docEl.requestFullscreen();
-      } else if (docEl.webkitRequestFullscreen) {
-        await docEl.webkitRequestFullscreen();
-      } else if (docEl.mozRequestFullScreen) {
-        await docEl.mozRequestFullScreen();
-      } else if (docEl.msRequestFullscreen) {
-        await docEl.msRequestFullscreen();
-      }
-      this.isInFullscreen = true;
-      await this.lockKeyboard();
-    } catch (err) {
-      console.warn("Fullscreen request not permitted or blocked:", err);
+  // แสดงข้อความแจ้งเตือนในหน้าเว็บ (Toast Notification) โดยไม่ต้องใช้ window.alert
+  showCopyToast(message) {
+    if (typeof document === "undefined") return;
+    let toast = document.getElementById("assessmentCopyToast");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.id = "assessmentCopyToast";
+      toast.className = "assessment-copy-toast";
+      document.body.appendChild(toast);
     }
-  }
+    toast.textContent = message;
+    toast.classList.remove("hidden");
+    toast.classList.add("show");
 
-  // ออกจากโหมดเต็มหน้าจอและปลดล็อกคีย์บอร์ด
-  async exitExamFullscreen() {
-    this.unlockKeyboard();
-    try {
-      if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement) {
-        if (document.exitFullscreen) {
-          await document.exitFullscreen();
-        } else if (document.webkitExitFullscreen) {
-          await document.webkitExitFullscreen();
-        } else if (document.mozCancelFullScreen) {
-          await document.mozCancelFullScreen();
-        } else if (document.msExitFullscreen) {
-          await document.msExitFullscreen();
-        }
-      }
-    } catch (err) {
-      console.warn("Exit fullscreen error:", err);
-    }
-    this.isInFullscreen = false;
-  }
-
-  // ระบบล็อกคีย์บอร์ดระดับเบราว์เซอร์ (Keyboard Lock API - Chrome / Edge)
-  async lockKeyboard() {
-    if (navigator.keyboard && typeof navigator.keyboard.lock === "function") {
-      try {
-        await navigator.keyboard.lock(["Escape", "Tab", "AltLeft", "AltRight", "MetaLeft", "MetaRight"]);
-      } catch (err) {
-        console.warn("Keyboard lock failed:", err);
-      }
-    }
-  }
-
-  unlockKeyboard() {
-    if (navigator.keyboard && typeof navigator.keyboard.unlock === "function") {
-      try {
-        navigator.keyboard.unlock();
-      } catch (err) {
-        console.warn("Keyboard unlock failed:", err);
-      }
-    }
-  }
-
-  // สัญญาณเสียงเตือนภัยเมื่อพยายามสลับหน้าต่าง (Web Audio API Synthesizer)
-  playAlarmBeep() {
-    try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(850, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(320, ctx.currentTime + 0.35);
-      gain.gain.setValueAtTime(0.25, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.36);
-    } catch (e) {
-      // AudioContext might be blocked until user gesture, safely ignore
-    }
+    if (this._toastTimer) clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => {
+      toast.classList.remove("show");
+      setTimeout(() => toast.classList.add("hidden"), 300);
+    }, 2500);
   }
 
   startTimer() {
@@ -163,7 +99,7 @@ class AssessmentSession {
       });
 
       if (this.timeRemainingSeconds <= 0) {
-        this.autoSubmit("หมดเวลาในการทำแบบทดสอบ");
+        this.autoSubmit("หมดเวลาในการทำแบบทดสอบ ระบบส่งคำตอบโดยอัตโนมัติ");
       }
     }, 1000);
   }
@@ -174,192 +110,75 @@ class AssessmentSession {
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   }
 
-  // ระบบตรวจจับการโกงและการสลับหน้าต่าง (Strict Anti-Cheat & Lockdown Trap)
+  // ระบบป้องกันการคัดลอกข้อสอบและตัวเลือก (Copy-Paste Protection)
   attachAntiCheatListeners() {
-    this._lastViolationTime = 0;
-    this._isLockedOut = false;
-
-    // 1. ตรวจจับการซ่อนแท็บ / สลับหน้าต่าง
-    this._visibilityHandler = () => {
-      if (document.hidden && !this.isSubmitted) {
-        this.handleViolation("ตรวจพบการสลับหน้าต่างโปรแกรม หรือเปิดแท็บอื่น");
-      }
-    };
-
-    // 2. ตรวจจับการสูญเสียโฟกัสของหน้าต่าง (Window Blur)
-    this._blurHandler = () => {
-      if (!this.isSubmitted && !this._isShowingDialog) {
-        this.handleViolation("ตรวจพบการคลิกออกจากหน้าต่างแบบทดสอบ หรือสลับโปรแกรม");
-      }
-    };
-
-    // 3. เมื่อหน้าต่างกลับมาโฟกัส
-    this._focusHandler = () => {
-      if (this.isSubmitted) return;
-      const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
-      if (isFull && this._isLockedOut) {
-        this.resolveLockdown();
-      }
-    };
-
-    // 4. ตรวจจับการออกจากโหมดเต็มหน้าจอ (Fullscreen Break)
-    this._fullscreenHandler = () => {
-      if (this.isSubmitted) return;
-      const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
-      this.isInFullscreen = isFull;
-      if (!isFull) {
-        this.handleViolation("ออกจากโหมดเต็มหน้าจอ (Fullscreen Exited)");
-      } else {
-        if (this._isLockedOut) {
-          this.resolveLockdown();
-        }
-      }
-    };
-
-    // 5. บล็อกคลิกขวา (Context Menu)
+    // 1. บล็อกการคลิกขวา (Context Menu)
     this._contextMenuHandler = (e) => {
       e.preventDefault();
+      this.showCopyToast("⚠️ ระบบไม่อนุญาตให้คลิกขวาในหน้าทำแบบทดสอบ");
       return false;
     };
 
-    // 6. บล็อกการเลือกข้อความ (Select Start)
+    // 2. บล็อกการเลือกคลุมข้อความ (Select Start)
     this._selectStartHandler = (e) => {
       e.preventDefault();
       return false;
     };
 
-    // 7. ดักจับและบล็อกปุ่มคีย์ลัดระบบทั้งหมด (Capture Phase)
+    // 3. บล็อกคำสั่งคัดลอก (Copy) และตัด (Cut)
+    this._copyHandler = (e) => {
+      e.preventDefault();
+      if (e.clipboardData) {
+        e.clipboardData.setData("text/plain", "");
+      }
+      this.showCopyToast("⚠️ ระบบไม่อนุญาตให้คัดลอกข้อความเพื่อไปหาคำตอบ");
+      return false;
+    };
+
+    this._cutHandler = (e) => {
+      e.preventDefault();
+      this.showCopyToast("⚠️ ระบบไม่อนุญาตให้คัดลอกข้อความ");
+      return false;
+    };
+
+    // 4. บล็อกคีย์ลัดคัดลอก: Ctrl+C, Ctrl+X, Ctrl+A, Ctrl+U (View Source)
     this._keyHandler = (e) => {
       const key = e.key ? e.key.toLowerCase() : "";
-      const isAlt = e.altKey || key === "alt";
-      const isMeta = e.metaKey || key === "meta";
-      const isCtrl = e.ctrlKey || key === "control";
+      const isCtrl = e.ctrlKey || e.metaKey;
 
-      // บล็อก Alt, Windows/Command keys ทุกกรณี (ป้องกัน Alt+Tab, Alt+F4)
-      if (isAlt || isMeta) {
+      if (isCtrl && ["c", "x", "a", "u"].includes(key)) {
         e.preventDefault();
-        e.stopPropagation();
-        return false;
-      }
-
-      // บล็อกเบราว์เซอร์ช็อตคัต: Ctrl+T, Ctrl+N, Ctrl+W, Ctrl+R, Ctrl+U, Ctrl+S, Ctrl+P, Ctrl+H, Ctrl+J
-      if (isCtrl && ["t", "n", "w", "r", "u", "s", "p", "h", "j"].includes(key)) {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
-      }
-
-      // บล็อก DevTools: F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C
-      if (key === "f12" || (isCtrl && e.shiftKey && ["i", "j", "c"].includes(key))) {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
-      }
-
-      // บล็อก F11 (Fullscreen toggle) และ F5 (Reload)
-      if (key === "f11" || key === "f5") {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
-      }
-
-      // บล็อก Escape key จากการยกเลิก Fullscreen
-      if (key === "escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
-      }
-
-      // บล็อกการคัดลอก/ตัด/วาง: Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A
-      if (isCtrl && ["c", "v", "x", "a"].includes(key)) {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
-      }
-
-      // บล็อก PrintScreen
-      if (key === "printscreen") {
-        e.preventDefault();
-        e.stopPropagation();
+        this.showCopyToast("⚠️ ระบบไม่อนุญาตให้คัดลอกข้อสอบหรือตัวเลือกคำตอบ");
         return false;
       }
     };
 
-    // 8. ป้องกันการปิดแท็บหรือรีเฟรชโดยไม่ตั้งใจ (BeforeUnload)
+    // 5. ป้องกันการปิดแท็บหรือรีเฟรชโดยไม่ตั้งใจ
     this._beforeUnloadHandler = (e) => {
       if (!this.isSubmitted) {
         e.preventDefault();
-        e.returnValue = "ระบบกำลังอยู่ในโหมดทำแบบทดสอบ หากปิดหน้านี้ผลสอบจะไม่ได้รับการบันทึก";
+        e.returnValue = "ระบบกำลังอยู่ในระหว่างการทำแบบทดสอบ หากปิดหน้านี้ผลสอบจะไม่ได้รับการบันทึก";
         return e.returnValue;
       }
     };
 
-    document.addEventListener("visibilitychange", this._visibilityHandler);
-    window.addEventListener("blur", this._blurHandler);
-    window.addEventListener("focus", this._focusHandler);
-    document.addEventListener("fullscreenchange", this._fullscreenHandler);
-    document.addEventListener("webkitfullscreenchange", this._fullscreenHandler);
-    document.addEventListener("mozfullscreenchange", this._fullscreenHandler);
-    document.addEventListener("MSFullscreenChange", this._fullscreenHandler);
     document.addEventListener("contextmenu", this._contextMenuHandler);
     document.addEventListener("selectstart", this._selectStartHandler);
-    window.addEventListener("keydown", this._keyHandler, { capture: true });
+    document.addEventListener("copy", this._copyHandler);
+    document.addEventListener("cut", this._cutHandler);
+    window.addEventListener("keydown", this._keyHandler);
     window.addEventListener("beforeunload", this._beforeUnloadHandler);
   }
 
   detachAntiCheatListeners() {
-    document.removeEventListener("visibilitychange", this._visibilityHandler);
-    window.removeEventListener("blur", this._blurHandler);
-    window.removeEventListener("focus", this._focusHandler);
-    document.removeEventListener("fullscreenchange", this._fullscreenHandler);
-    document.removeEventListener("webkitfullscreenchange", this._fullscreenHandler);
-    document.removeEventListener("mozfullscreenchange", this._fullscreenHandler);
-    document.removeEventListener("MSFullscreenChange", this._fullscreenHandler);
     document.removeEventListener("contextmenu", this._contextMenuHandler);
     document.removeEventListener("selectstart", this._selectStartHandler);
-    window.removeEventListener("keydown", this._keyHandler, { capture: true });
+    document.removeEventListener("copy", this._copyHandler);
+    document.removeEventListener("cut", this._cutHandler);
+    window.removeEventListener("keydown", this._keyHandler);
     window.removeEventListener("beforeunload", this._beforeUnloadHandler);
     if (this.timerInterval) clearInterval(this.timerInterval);
-  }
-
-  // ปลดล็อกหน้าจอเมื่อนักเรียนกลับเข้าสู่โหมดเต็มหน้าจออย่างถูกต้อง หรือส่งข้อสอบ
-  resolveLockdown() {
-    this._isLockedOut = false;
-    document.body.classList.remove("exam-blurred");
-    document.body.classList.remove("exam-lockdown-active");
-    const overlay = document.getElementById("examLockdownOverlay");
-    if (overlay) {
-      overlay.classList.add("hidden");
-    }
-  }
-
-  handleViolation(reason) {
-    if (this.isSubmitted) return;
-
-    // ส่งเสียงเตือนภัยทันที
-    this.playAlarmBeep();
-
-    // ล็อกหน้าจอทันทีและเบลอคำถามข้างหลัง
-    this._isLockedOut = true;
-    document.body.classList.add("exam-blurred");
-
-    // หน่วงเวลาป้องกันการตรวจจับซ้ำซ้อนของ blur + visibilitychange (cooldown 2 วินาที)
-    const now = Date.now();
-    if (now - this._lastViolationTime >= 2000) {
-      this.violationsCount++;
-      this._lastViolationTime = now;
-    }
-
-    this.onViolation({
-      violationsCount: this.violationsCount,
-      maxViolations: this.maxViolations,
-      reason: reason,
-      isLockedOut: true
-    });
-
-    if (this.violationsCount >= this.maxViolations) {
-      this.autoSubmit("ตรวจพบการสลับหน้าต่างหรือออกจากโหมดล็อกเกินกำหนด (" + this.maxViolations + " ครั้ง) ระบบส่งข้อสอบโดยอัตโนมัติ");
-    }
+    if (this._toastTimer) clearTimeout(this._toastTimer);
   }
 
   // เลือกคำตอบ
@@ -431,22 +250,16 @@ class AssessmentSession {
     if (this.isSubmitted) return;
     this.isSubmitted = true;
     this.detachAntiCheatListeners();
-    this.resolveLockdown();
-    this.exitExamFullscreen();
     const result = this.calculateResults();
     this.onSubmit(result);
     return result;
   }
 
+  // ส่งข้อสอบอัตโนมัติ (เช่น เมื่อหมดเวลา) โดยไม่ใช้ window.alert
   autoSubmit(message) {
     if (this.isSubmitted) return;
-    this._isShowingDialog = true;
-    try {
-      alert("⚠️ " + message);
-    } finally {
-      this._isShowingDialog = false;
-      this.submit();
-    }
+    this.showCopyToast(message || "หมดเวลาการทำแบบทดสอบ");
+    this.submit();
   }
 }
 
