@@ -68,7 +68,7 @@
     <!-- VIEW 1: AUTHENTICATION (เข้าสู่ระบบด้วย Username & Password)    -->
     <!-- ============================================================== -->
     <!-- ============================================================== -->
-    <!-- VIEW 1: AUTHENTICATION (ระบบ Login 2 ขั้นตอน Google OAuth 2.0)  -->
+    <!-- VIEW 1: AUTHENTICATION (เข้าสู่ระบบ นักเรียน & ผู้ดูแลระบบ)     -->
     <!-- ============================================================== -->
     <section id="view-auth" class="view-section active">
       <div class="auth-wrapper">
@@ -79,150 +79,110 @@
           </div>
 
           <div class="auth-card-body">
-
-            <!-- Tabs: Student (Google SSO) / Admin -->
-            <div class="auth-tabs mb-4">
+            <!-- Tabs: Student / Admin -->
+            <div class="auth-tabs">
               <button type="button" class="auth-tab-btn active" data-role="student">
-                🎓 เข้าสู่ระบบด้วย Google (@psuwit.ac.th)
+                🎓 สำหรับนักเรียน
               </button>
               <button type="button" class="auth-tab-btn" data-role="admin">
                 🛡️ ผู้ดูแลระบบ (Admin)
               </button>
             </div>
 
-            <!-- Student Login Container (2-Step Flow: Step 1 Google SSO -> Step 2 Profile Confirmation) -->
+            <!-- Student Login Container (Username & Password) -->
             <div id="studentLoginContainer">
-
-              <!-- Domain Restriction Notice Box (แสดงเมื่ออีเมลไม่ตรงตามโดเมนที่กำหนด) -->
-              <div id="domainRestrictionAlert" class="domain-restricted-card hidden">
-                <div class="dr-icon">🚫</div>
-                <div class="dr-title">ปฏิเสธการเข้าใช้งาน</div>
-                <div class="dr-desc" id="domainRestrictionMsg">
-                  อนุญาตเฉพาะนักเรียน/บุคลากรภายในองค์กรเท่านั้น
+              <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl mb-4 flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-bold text-indigo-900">🔐 เข้าสู่ระบบสำหรับนักเรียน (Username &amp; Password)</div>
+                  <div class="text-xs text-indigo-700 mt-0.5">ใช้ชื่อผู้ใช้งานและรหัสผ่านที่กำหนดในระบบโรงเรียน</div>
                 </div>
-                <div class="text-xs text-red-700 mt-2">
-                  กรุณาเข้าสู่ระบบด้วยบัญชี Google ที่ลงท้ายด้วย <strong>@psuwit.ac.th</strong> เท่านั้น
-                </div>
-                <button type="button" class="btn btn-sm btn-secondary mt-3" onclick="App.resetLoginState()">
-                  🔄 ลองใหม่อีกครั้งด้วยบัญชี @psuwit.ac.th
-                </button>
+                <span class="badge badge-primary">Student</span>
               </div>
 
-              <!-- STEP 1: Google Organization (@psuwit.ac.th) Sign-In -->
-              <div id="studentSsoForm">
-                <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl mb-4 flex items-center justify-between">
-                  <div>
-                    <div class="text-xs font-bold text-indigo-900">🔐 ขั้นตอนที่ 1 / 2 : ล็อกอินด้วย Google Account (@psuwit.ac.th)</div>
-                    <div class="text-xs text-indigo-700 mt-0.5">ต้องยืนยันตัวตนผ่าน Google Workspace ของโรงเรียนก่อนเข้าทำแบบทดสอบ</div>
-                  </div>
-                  <span class="badge badge-primary">Step 1</span>
-                </div>
-
-                <!-- Google Sign-In Box -->
-                <div class="p-5 bg-slate-50 border border-slate-200 rounded-2xl text-center mb-3">
-                  <div class="mx-auto mb-3 flex items-center justify-center" style="width: 52px; height: 52px; border-radius: 50%; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-                    <svg width="28" height="28" viewBox="0 0 24 24">
-                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-                    </svg>
-                  </div>
-                  <div class="font-bold text-slate-800 text-sm mb-1">Google Workspace Single Sign-On (SSO)</div>
-                  <p class="text-xs text-slate-500 mb-4">
-                    ลงชื่อเข้าใช้ด้วยบัญชี Google ของโรงเรียน<br>
-                    รูปแบบ <strong class="text-indigo-600">รหัสนักเรียน/บุคลากร@psuwit.ac.th</strong> (เช่น <code>50015@psuwit.ac.th</code>)
-                  </p>
-
-                  <!-- Google Identity Services Container (ถ้ามี Client ID ใน .env) -->
-                  <div id="googleSignInBtnContainer" style="min-height: 44px; display: flex; justify-content: center; margin-bottom: 0.5rem;"></div>
-
-                  <!-- Primary Direct Google Button -->
-                  <button id="btnGoogleSignIn" type="button" class="btn-google-sso" onclick="App.triggerGoogleSignIn()">
-                    <svg class="google-icon-svg" viewBox="0 0 24 24">
-                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-                    </svg>
-                    <span>เข้าสู่ระบบด้วย Google (@psuwit.ac.th)</span>
-                  </button>
-                </div>
-
-                <p class="form-help text-center text-xs text-slate-500">
-                  🔒 ระบบอนุญาตเฉพาะเมลองค์กร <strong>@psuwit.ac.th</strong> เท่านั้น (ไม่อนุญาตบัญชี @gmail.com ทั่วไป)
-                </p>
+              <div id="studentAuthErrorBanner"
+                class="hidden p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold">
               </div>
 
-              <!-- STEP 2: Profile & Assessment Confirmation (แสดงหลังจากผ่านขั้นตอนที่ 1 แล้ว) -->
-              <form id="studentProfileForm" class="hidden">
-                <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl mb-4">
-                  <div class="flex justify-between items-center">
-                    <div class="flex items-center gap-2">
-                      <div style="font-size: 1.25rem;">✅</div>
-                      <div>
-                        <div class="text-xs font-bold text-emerald-900">ล็อกอิน Google องค์กรสำเร็จ (ขั้นตอนที่ 2 / 2)</div>
-                        <div class="text-xs text-emerald-800 mt-0.5">
-                          บัญชี: <strong id="verifiedSsoEmailDisplay">-</strong><br>
-                          รหัสประจำตัว: <strong id="verifiedSsoIdDisplay" class="text-indigo-700">-</strong>
-                        </div>
-                      </div>
-                    </div>
-                    <button type="button" id="btnChangeSsoAccount" class="btn btn-secondary btn-sm" onclick="App.resetSsoStep()" style="padding: 0.25rem 0.6rem; font-size: 0.72rem;">
-                      สลับบัญชี
+              <form id="studentCredentialsForm">
+                <div class="form-group">
+                  <label class="form-label" for="loginStudentUsername">ชื่อผู้ใช้งาน (Username) *</label>
+                  <input type="text" id="loginStudentUsername" class="form-control"
+                    placeholder="เช่น 6166@psuwit.ac.th หรือรหัสนักเรียน 6166" autocomplete="username" required>
+                  <p class="form-help">สามารถกรอกอีเมลเต็ม เช่น <code>6166@psuwit.ac.th</code> หรือเฉพาะรหัสนักเรียน 4 หลัก เช่น <code>6166</code></p>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="loginStudentPassword">รหัสผ่าน (Password) *</label>
+                  <div class="flex gap-2">
+                    <input type="password" id="loginStudentPassword" class="form-control"
+                      placeholder="กรอกรหัสผ่านของคุณ (ค่าเริ่มต้น 123456)" autocomplete="current-password" required>
+                    <button type="button" class="btn btn-secondary btn-sm"
+                      onclick="App.togglePasswordVisibility('loginStudentPassword', this)" title="แสดง/ซ่อนรหัสผ่าน"
+                      style="white-space: nowrap;">
+                      👁️ แสดง
                     </button>
                   </div>
                 </div>
 
-                <div class="form-group mb-3">
-                  <label class="form-label" for="loginStudentName">ชื่อ - นามสกุล *</label>
-                  <input
-                    type="text"
-                    id="loginStudentName"
-                    class="form-control"
-                    placeholder="เช่น เด็กชายกรธัช เด่นสันติกุล หรือ นายวินัย รัตนพล"
-                    required
-                  >
-                </div>
-
-                <div class="form-group mb-4">
-                  <label class="form-label" for="loginStudentGrade">ระดับชั้นมัธยมศึกษา *</label>
-                  <select id="loginStudentGrade" class="form-control" required>
-                    <option value="" disabled selected>-- กรุณาเลือกระดับชั้น --</option>
-                    <option value="ม.1">มัธยมศึกษาปีที่ 1 (ม.1)</option>
-                    <option value="ม.2">มัธยมศึกษาปีที่ 2 (ม.2)</option>
-                    <option value="ม.3">มัธยมศึกษาปีที่ 3 (ม.3)</option>
-                    <option value="ม.4">มัธยมศึกษาปีที่ 4 (ม.4)</option>
-                    <option value="ม.5">มัธยมศึกษาปีที่ 5 (ม.5)</option>
-                    <option value="ม.6">มัธยมศึกษาปีที่ 6 (ม.6)</option>
-                  </select>
-                </div>
-
-                <button type="submit" class="btn btn-primary" style="width: 100%; background: linear-gradient(135deg, #059669, #10B981); font-weight: 700; padding: 0.75rem;">
-                  ยืนยันข้อมูลและเข้าสู่ระบบการทดสอบ 🚀
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem;">
+                  🚀 เข้าสู่ระบบทำแบบทดสอบ
                 </button>
               </form>
 
+              <div class="mt-4 pt-3 border-t border-slate-200 flex justify-between items-center text-xs">
+                <span class="text-slate-500">ต้องการเปลี่ยนรหัสผ่านของคุณ?</span>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="App.openChangePasswordModal()">
+                  🔑 แก้ไขรหัสผ่านด้วยตนเอง
+                </button>
+              </div>
             </div>
 
-            <!-- Admin Login Form (รหัสผ่านสำรองสำหรับ Admin) -->
-            <form id="adminLoginForm" class="hidden">
-              <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl mb-4 text-xs text-amber-900">
-                🛡️ <strong>เข้าสู่ระบบผู้ดูแลระบบ (Admin)</strong>: สำหรับจัดการข้อมูลและตั้งค่าระบบ
+            <!-- Admin Login Container (Username & Password สำหรับผู้ดูแลระบบ) -->
+            <div id="adminLoginForm" class="hidden">
+              <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl mb-4 flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-bold text-amber-900">🛡️ เข้าสู่ระบบผู้ดูแลระบบ (Admin Only)</div>
+                  <div class="text-xs text-amber-800 mt-0.5">จำกัดสิทธิ์เฉพาะบัญชีผู้ดูแลระบบในฐานข้อมูลเท่านั้น</div>
+                </div>
+                <span class="badge badge-warning">Admin</span>
               </div>
-              <div id="adminAuthErrorBanner" class="hidden p-3 mb-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold"></div>
-              <div class="form-group mb-3">
-                <label class="form-label" for="loginAdminUsername">อีเมลหรือชื่อผู้ใช้งาน</label>
-                <input type="text" id="loginAdminUsername" class="form-control" placeholder="เช่น winai@psuwit.ac.th" required>
+
+              <div id="adminAuthErrorBanner"
+                class="hidden p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold">
               </div>
-              <div class="form-group mb-4">
-                <label class="form-label" for="loginAdminPassword">รหัสผ่าน</label>
-                <input type="password" id="loginAdminPassword" class="form-control" placeholder="รหัสผ่านผู้ดูแลระบบ" required>
+
+              <form id="adminCredentialsForm">
+                <div class="form-group">
+                  <label class="form-label" for="loginAdminUsername">ชื่อผู้ใช้งานผู้ดูแลระบบ (Admin Username) *</label>
+                  <input type="text" id="loginAdminUsername" class="form-control" placeholder="Email หรือ Username ผู้ดูแลระบบ"
+                    autocomplete="username" required>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="loginAdminPassword">รหัสผ่านผู้ดูแลระบบ (Password) *</label>
+                  <div class="flex gap-2">
+                    <input type="password" id="loginAdminPassword" class="form-control"
+                      placeholder="กรอกรหัสผ่านผู้ดูแลระบบ" autocomplete="current-password" required>
+                    <button type="button" class="btn btn-secondary btn-sm"
+                      onclick="App.togglePasswordVisibility('loginAdminPassword', this)" title="แสดง/ซ่อนรหัสผ่าน"
+                      style="white-space: nowrap;">
+                      👁️ แสดง
+                    </button>
+                  </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem;">
+                  🛡️ เข้าสู่ระบบผู้ดูแลระบบ (Admin)
+                </button>
+              </form>
+
+              <div class="mt-4 pt-3 border-t border-slate-200 flex justify-between items-center text-xs">
+                <span class="text-slate-500">ต้องการเปลี่ยนรหัสผ่านผู้ดูแลระบบ?</span>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="App.openChangePasswordModal()">
+                  🔑 แก้ไขรหัสผ่านด้วยตนเอง
+                </button>
               </div>
-              <button type="submit" class="btn btn-primary" style="width: 100%; font-weight: 700; padding: 0.75rem;">
-                เข้าสู่ระบบ Admin 🛡️
-              </button>
-            </form>
+            </div>
 
           </div>
         </div>
@@ -1094,86 +1054,6 @@
   </div>
 
   <!-- ============================================================== -->
-  <!-- MODAL: GOOGLE WORKSPACE (@psuwit.ac.th) SIGN-IN POPUP          -->
-  <!-- ============================================================== -->
-  <div id="googleOAuthModal" class="modal-overlay">
-    <div class="modal-content" style="max-width: 440px; border-radius: 16px; padding: 2rem;">
-      <div class="text-center mb-4">
-        <div class="mx-auto mb-2 flex items-center justify-center">
-          <svg width="40" height="40" viewBox="0 0 24 24">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-          </svg>
-        </div>
-        <h3 id="googleModalTitle" class="text-xl font-bold text-slate-900">ลงชื่อเข้าใช้ด้วย Google</h3>
-        <p id="googleModalSubtitle" class="text-xs text-slate-500 mt-1">
-          ใช้บัญชี Google Workspace องค์กร (<strong>@psuwit.ac.th</strong>) เพื่อดำเนินการต่อยัง<br>
-          <span class="font-semibold text-indigo-600">PSU WIT IT Competency Assessment</span>
-        </p>
-      </div>
-
-      <!-- Google Sign-In Step 1: Enter @psuwit.ac.th Email -->
-      <form id="googleModalEmailForm">
-        <div class="form-group mb-3">
-          <label class="form-label" for="googleModalEmailInput">อีเมลองค์กร (@psuwit.ac.th)</label>
-          <input
-            type="email"
-            id="googleModalEmailInput"
-            class="form-control"
-            placeholder="เช่น 50015@psuwit.ac.th หรือ 6166@psuwit.ac.th"
-            required
-          >
-          <div id="googleModalEmailError" class="hidden text-xs text-red-600 font-semibold mt-2"></div>
-          <p class="form-help mt-1 text-xs text-slate-500">
-            ต้องเป็นบัญชีของโรงเรียนที่ลงท้ายด้วย <strong>@psuwit.ac.th</strong> เท่านั้น (ไม่อนุญาต @gmail.com)
-          </p>
-        </div>
-
-        <div class="flex justify-between items-center mt-6">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="App.closeGoogleModal()">
-            ยกเลิก
-          </button>
-          <button type="submit" class="btn btn-primary btn-sm" style="background: #1a73e8; padding: 0.55rem 1.4rem;">
-            ถัดไป →
-          </button>
-        </div>
-      </form>
-
-      <!-- Google Sign-In Step 2: Enter Google Account Password -->
-      <form id="googleModalPasswordForm" class="hidden">
-        <div class="flex items-center justify-center mb-4">
-          <span id="googleModalAccountPill" class="px-3 py-1 rounded-full border border-slate-300 text-xs font-semibold text-slate-700 bg-slate-50">
-            50015@psuwit.ac.th
-          </span>
-        </div>
-
-        <div class="form-group mb-3">
-          <label class="form-label" for="googleModalPasswordInput">ป้อนรหัสผ่านบัญชี Google ของคุณ</label>
-          <input
-            type="password"
-            id="googleModalPasswordInput"
-            class="form-control"
-            placeholder="รหัสผ่าน Gmail (@psuwit.ac.th)"
-            required
-          >
-          <div id="googleModalPasswordError" class="hidden text-xs text-red-600 font-semibold mt-2"></div>
-        </div>
-
-        <div class="flex justify-between items-center mt-6">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="App.backToGoogleEmailStep()">
-            ← เปลี่ยนอีเมล
-          </button>
-          <button type="submit" class="btn btn-primary btn-sm" style="background: #1a73e8; padding: 0.55rem 1.4rem;">
-            ลงชื่อเข้าใช้ ✅
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ============================================================== -->
   <!-- MODAL: ASSESSMENT DETAIL WITH RADAR CHART -->
   <!-- ============================================================== -->
   <div id="assessmentDetailModal" class="modal-overlay">
@@ -1219,47 +1099,16 @@
     </div>
   </div>
 
-  <!-- Modal 3: เครื่องมือทดสอบ Google Login บน Localhost -->
-  <div id="modalLocalhostGoogleTest" class="app-confirm-modal">
-    <div class="app-confirm-box" style="max-width: 520px; text-align: left;">
-      <div class="flex justify-between items-center mb-3">
-        <h3 class="font-bold text-base text-slate-800">💻 ทดสอบ Google Login บน Localhost</h3>
-        <button type="button" class="btn btn-sm btn-secondary" onclick="document.getElementById('modalLocalhostGoogleTest').classList.remove('active')">✕</button>
-      </div>
-      <p class="text-xs text-slate-600 mb-3">
-        ทดสอบเงื่อนไข <strong>Domain Restriction (@psuwit.ac.th)</strong> และการดึง <code>student_id</code>:
-      </p>
-      <div class="space-y-2 mb-4">
-        <button type="button" class="btn btn-sm btn-secondary" style="width: 100%; text-align: left; justify-content: flex-start;" onclick="App.simulateGoogleLogin('50015@psuwit.ac.th', 'นายวินัย รัตนพล')">
-          ✅ <strong>50015@psuwit.ac.th</strong> (ผ่าน - บุคลากร/Admin)
-        </button>
-        <button type="button" class="btn btn-sm btn-secondary" style="width: 100%; text-align: left; justify-content: flex-start;" onclick="App.simulateGoogleLogin('6166@psuwit.ac.th', 'นักเรียน ทดสอบ ม.1')">
-          ✅ <strong>6166@psuwit.ac.th</strong> (ผ่าน - นักเรียน ม.1)
-        </button>
-        <button type="button" class="btn btn-sm btn-secondary" style="width: 100%; text-align: left; justify-content: flex-start; color: #DC2626; border-color: #FCA5A5; background: #FEF2F2;" onclick="App.simulateGoogleLogin('user@gmail.com', 'คนภายนอก')">
-          ❌ <strong>user@gmail.com</strong> (ปฏิเสธ - โดเมนภายนอก)
-        </button>
-      </div>
-      <div class="form-group mb-2">
-        <label class="form-label text-xs">หรือทดสอบพิมพ์อีเมลใดๆ:</label>
-        <div class="flex gap-2">
-          <input type="email" id="inputCustomTestEmail" class="form-control text-xs" placeholder="เช่น 55555@psuwit.ac.th หรือ someone@gmail.com">
-          <button type="button" class="btn btn-primary btn-sm" onclick="App.simulateCustomGoogleLogin()">ทดสอบ</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- Application Scripts in Order -->
-  <script src="js/config.js?v=9"></script>
-  <script src="js/questions.js?v=9"></script>
-  <script src="js/users_data.js?v=9"></script>
-  <script src="js/storage.js?v=9"></script>
-  <script src="js/charts.js?v=9"></script>
-  <script src="js/certificate.js?v=9"></script>
-  <script src="js/assessment.js?v=9"></script>
-  <script src="js/admin.js?v=9"></script>
-  <script src="js/app.js?v=9"></script>
+  <script src="js/config.js?v=10"></script>
+  <script src="js/questions.js?v=10"></script>
+  <script src="js/users_data.js?v=10"></script>
+  <script src="js/storage.js?v=10"></script>
+  <script src="js/charts.js?v=10"></script>
+  <script src="js/certificate.js?v=10"></script>
+  <script src="js/assessment.js?v=10"></script>
+  <script src="js/admin.js?v=10"></script>
+  <script src="js/app.js?v=10"></script>
 
 </body>
 
